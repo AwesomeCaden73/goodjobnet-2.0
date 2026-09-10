@@ -318,7 +318,7 @@ function JobSeekerEntry({ user }) {
           </div>
 
           {message && (
-            <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? '#27ae60' : '#c0392b' }}>
+            <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? 'var(--success)' : 'var(--error)' }}>
               {message}
             </div>
           )}
@@ -409,7 +409,7 @@ function JobSeekerEntry({ user }) {
                   </div>
                 ) : <p style={{ fontStyle: 'italic', color: 'var(--text-light)', marginBottom: '1.5rem' }}>No currently hiring jobs found matching criteria.</p>}
 
-                <h3 style={{ marginTop: '2rem', color: '#8a650d', borderBottom: '2px solid #f39c12', paddingBottom: '0.4rem', marginBottom: '0.8rem' }}>
+                <h3 style={{ marginTop: '2rem', color: 'var(--warning)', borderBottom: '2px solid #f39c12', paddingBottom: '0.4rem', marginBottom: '0.8rem' }}>
                   Other Jobs Meeting Criteria (Not Currently Hiring) ({matchingJobs.older.length})
                 </h3>
                 {matchingJobs.older.length > 0 ? (

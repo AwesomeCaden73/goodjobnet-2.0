@@ -133,7 +133,7 @@ function AdminPage({ user }) {
         </header>
 
         {/* User Session Info Card */}
-        <div style={{ background: 'rgba(255, 255, 255, 0.6)', border: '1px solid var(--glass-border)', borderRadius: '12px', padding: '1.5rem', marginBottom: '2rem' }}>
+        <div style={{ background: 'var(--surface-soft)', border: '1px solid var(--glass-border)', borderRadius: '12px', padding: '1.5rem', marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.2rem', color: 'var(--text-dark)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <FaUser style={{ color: 'var(--primary-color)' }} /> Active Session Info
           </h2>
@@ -144,7 +144,7 @@ function AdminPage({ user }) {
             </div>
             <div>
               <strong style={{ color: 'var(--text-light)', fontSize: '0.85rem' }}>System Role</strong>
-              <p style={{ fontWeight: '600', color: user?.role === 'admin' ? '#27ae60' : 'var(--text-dark)' }}>
+              <p style={{ fontWeight: '600', color: user?.role === 'admin' ? 'var(--success)' : 'var(--text-dark)' }}>
                 {user?.role === 'admin' ? 'Administrator' : user?.role || 'Standard User'}
               </p>
             </div>
@@ -250,7 +250,7 @@ function AdminPage({ user }) {
                     width: 'auto',
                     padding: '0.5rem 1.25rem',
                     fontSize: '0.85rem',
-                    background: 'rgba(255,255,255,0.8)',
+                    background: 'var(--surface)',
                     borderColor: 'var(--primary-color)',
                     color: 'var(--primary-color)'
                   }}
@@ -273,7 +273,7 @@ function AdminPage({ user }) {
                     width: 'auto',
                     padding: '0.5rem 1.25rem',
                     fontSize: '0.85rem',
-                    background: 'rgba(255,255,255,0.8)',
+                    background: 'var(--surface)',
                     borderColor: 'var(--primary-color)',
                     color: 'var(--primary-color)'
                   }}

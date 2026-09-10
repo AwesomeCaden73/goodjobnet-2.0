@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Grid3X3, CircleHelp, ArrowRight, LogOut, X, ChevronRight } from 'lucide-react';
+import { Search, Grid3X3, CircleHelp, ArrowRight, LogOut, X, ChevronRight, Palette } from 'lucide-react';
 import { visibleApps, launcher } from './navigation';
+import ThemeMenu from './ThemeMenu';
 
 function HeaderSearch({ user }) {
   const location = useLocation();
@@ -25,10 +26,10 @@ export default function Shell({ user, onLogout }) {
   const active = available.find(a => a.path === location.pathname);
   const routeNames = { '/dashboard': 'Home', '/employment-dashboard': 'Home', '/job-seeker-dashboard': 'Home', '/job-entry': 'Add opportunity', '/job-seeker-entry': location.state?.seeker ? 'Job seeker details' : 'Add job seeker', '/hot-jobs-5review': 'Expiring jobs', '/hot-jobs-46review': 'Expired jobs', '/search': 'Search', '/create': 'Create' };
   const pageTitle = active?.title || (location.pathname === '/apps' ? 'Apps' : routeNames[location.pathname]) || 'Page not found';
-  const railPath = location.pathname.includes('review') ? '/hot-jobs-review' : location.pathname === '/job-seeker-entry' && location.state?.seeker ? '/job-seeker-search' : ['/job-entry', '/job-seeker-entry'].includes(location.pathname) ? '/create' : ['/dashboard', '/employment-dashboard', '/job-seeker-dashboard'].includes(location.pathname) ? '/' : location.pathname;
+  const railPath = location.pathname.includes('review') ? '/hot-jobs-review' : ['/job-entry', '/map'].includes(location.pathname) ? '/hot-job-search' : ['/job-seeker-entry', '/assigned-job-seekers'].includes(location.pathname) && !location.state?.seeker ? '/job-seeker-search' : location.pathname === '/job-seeker-entry' && location.state?.seeker ? '/job-seeker-search' : ['/dashboard', '/employment-dashboard', '/job-seeker-dashboard'].includes(location.pathname) ? '/' : location.pathname;
   const jobsArea = ['/hot-job-search', '/map', '/hot-jobs-review', '/hot-jobs-5review', '/hot-jobs-46review', '/job-entry'].includes(location.pathname);
   const peopleArea = ['/job-seeker-search', '/assigned-job-seekers', '/job-seeker-entry'].includes(location.pathname);
-  const sectionLinks = jobsArea ? [available.find(a => a.title === 'Jobs'), available.find(a => a.title === 'Job map'), ...(user ? [available.find(a => a.title === 'Review'), { title: 'Add opportunity', path: '/job-entry' }] : [])] : peopleArea && user ? [available.find(a => a.title === 'Job seekers'), available.find(a => a.title === 'My people'), { title: location.state?.seeker ? 'Job seeker details' : 'Add job seeker', path: '/job-seeker-entry' }] : [];
+  const sectionLinks = jobsArea ? [available.find(a => a.title === 'Jobs'), { title: 'Job map', path: '/map' }, ...(user ? [{ title: 'Add opportunity', path: '/job-entry' }] : [])] : peopleArea && user ? [available.find(a => a.title === 'Job seekers'), { title: 'My people', path: '/assigned-job-seekers' }, { title: location.state?.seeker ? 'Job seeker details' : 'Add job seeker', path: '/job-seeker-entry' }] : [];
   useEffect(() => {
     const shortcut = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); document.getElementById('workspace-search')?.focus(); }
@@ -49,9 +50,11 @@ export default function Shell({ user, onLogout }) {
       <Link to="/" className="suite-brand" onClick={go}><span className="brand-mark"><span /><span /><span /></span>GoodJobNet<span className="beta-label">BETA</span></Link>
       <HeaderSearch key={location.pathname + location.search} user={user} />
       <div className="header-actions"><Link className="icon-button" to="/help" aria-label="Help"><CircleHelp size={20} /></Link>
+        <button type="button" className="icon-button" aria-label="Theme settings" aria-expanded={panel === 'themes'} onClick={() => setPanel(panel === 'themes' ? null : 'themes')}><Palette size={20} /></button>
         {user ? <button className="avatar" aria-label="Account menu" aria-expanded={panel === 'account'} onClick={() => setPanel(panel === 'account' ? null : 'account')}>{user.name.split(/\s+/).map(n => n[0]).slice(0, 2).join('').toUpperCase()}</button> : <Link className="sign-in-link" to="/login">Sign in <ArrowRight size={15} /></Link>}
       </div>
       {panel === 'apps' && <div className="launcher-popover"><div className="section-heading"><h2>Your apps</h2><button className="icon-button" aria-label="Close launcher" onClick={go}><X size={18} /></button></div><div className="launcher-grid">{available.map(({ title, path, icon: Icon, color }) => <Link key={path} to={path} onClick={go}><span className={'app-icon ' + color}><Icon size={24} /></span>{title}</Link>)}</div><Link to="/apps" className="text-link" onClick={go}>Explore all apps <ArrowRight size={16} /></Link></div>}
+      {panel === 'themes' && <ThemeMenu onClose={go} />}
       {panel === 'account' && user && <div className="account-popover"><strong>{user.name}</strong><p>{user.role} {user.ward && '· ' + user.ward}</p>{user.email && <p>{user.email}</p>}<button className="subtle-button" onClick={() => { go(); onLogout(); navigate('/login'); }}><LogOut size={17} /> Sign out</button></div>}
     </header>
     <nav className="app-rail" aria-label="Main navigation">{[...available.filter(a => !['Administration', 'Help'].includes(a.title)), launcher].map(({ title, path, icon: Icon }) => <NavLink key={path} to={path} end={path === '/'} className={'rail-item ' + (railPath === path ? 'active' : '')} aria-current={railPath === path ? 'page' : undefined} onClick={go}><Icon size={22} strokeWidth={1.65} /><span>{title}</span></NavLink>)}<NavLink className="rail-item rail-help" to="/help"><CircleHelp size={22} /><span>Help</span></NavLink></nav>

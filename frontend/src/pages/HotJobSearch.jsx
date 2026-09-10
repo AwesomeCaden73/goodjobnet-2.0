@@ -1,18 +1,21 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { Search, SlidersHorizontal } from 'lucide-react';
+import { JobGroups } from '../components/SearchCards';
+import InformationPane from '../components/InformationPane';
 
-function HotJobSearch({ user }) {
+function HotJobSearch() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [searchMode, setSearchMode] = useState('type-location');
-  const navigate = useNavigate();
+  const [selection, setSelection] = useState(null);
 
   const handleSearch = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     const formData = new FormData(e.target);
-    let data = {};
+    let data;
 
     if (searchMode === 'company') {
       data = {
@@ -54,56 +57,11 @@ function HotJobSearch({ user }) {
     }
   };
 
-  return (
-    <div className="app-container" style={{ flexDirection: 'column', maxWidth: '1400px' }}>
-      <div className="glass-panel main-form" style={{ maxWidth: '1300px' }}>
-        <header>
-          <h1>Job Search</h1>
-          <p className="subtitle">
-            {searchMode === 'company' 
-              ? 'Find potential jobs by company name' 
-              : 'Find potential jobs based on radius and job type'}
-          </p>
-        </header>
-
+  return <div className="workspace-page search-page advanced-search-page">
+    <div className="page-heading"><div><p className="eyebrow">FIND YOUR NEXT OPPORTUNITY</p><h1>Job Search</h1><p>Find opportunities by company, job type, and location.</p></div><Link className="subtle-button" to="/search"><Search size={16} />Universal search</Link></div>
+    <section className="surface search-filter-panel"><h2><SlidersHorizontal size={18} />Search filters</h2>
         <form onSubmit={handleSearch}>
-          {/* Search Mode Toggles */}
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            gap: '2rem', 
-            marginBottom: '2rem', 
-            paddingBottom: '1rem', 
-            borderBottom: '1px solid rgba(0,0,0,0.05)' 
-          }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: '500', color: 'var(--text-dark)' }}>
-              <input 
-                type="radio" 
-                name="search_mode" 
-                value="type-location" 
-                checked={searchMode === 'type-location'} 
-                onChange={() => {
-                  setSearchMode('type-location');
-                  setResults(null);
-                }} 
-              />
-              Search by Job Type & Location
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: '500', color: 'var(--text-dark)' }}>
-              <input 
-                type="radio" 
-                name="search_mode" 
-                value="company" 
-                checked={searchMode === 'company'} 
-                onChange={() => {
-                  setSearchMode('company');
-                  setResults(null);
-                }} 
-              />
-              Search by Company Name
-            </label>
-          </div>
-
+          <div className="search-tabs filter-mode" aria-label="Search method">{[['type-location', 'Job type & location'], ['company', 'Company name']].map(([value, label]) => <button type="button" key={value} className={searchMode === value ? 'selected' : ''} aria-pressed={searchMode === value} onClick={() => { setSearchMode(value); setResults(null); }}>{label}</button>)}</div>
           {searchMode === 'company' ? (
             <div className="form-grid">
               <div className="input-group full-width">
@@ -190,102 +148,13 @@ function HotJobSearch({ user }) {
             </div>
           )}
 
-          <div className="actions mt-2 text-center">
-            <button type="submit" className="btn primary-btn" style={{ maxWidth: '300px' }} disabled={loading}>
-              {loading ? 'Searching...' : 'Search'}
-            </button>
-            <button type="button" className="btn secondary-btn" style={{ maxWidth: '300px', marginLeft: '1rem' }} onClick={() => {
-              if (user) {
-                navigate(user.role === 'admin' ? '/employment-dashboard' : '/dashboard');
-              } else {
-                navigate('/');
-              }
-            }}>
-              {user ? 'Back to Dashboard' : 'Back to Job Seeker Dashboard'}
-            </button>
-          </div>
+          <div className="filter-actions"><button type="submit" className="solid-button" disabled={loading}><Search size={17} />{loading ? 'Searching...' : 'Search jobs'}</button><span className="muted">Select a result to view opportunity details.</span></div>
         </form>
-
-        {results && (
-          <div className="results-section mt-2">
-            <h2>Search Results</h2>
-
-            <h3 style={{ marginTop: '1.5rem', color: 'var(--success)' }}>Currently Hiring Jobs</h3>
-            {results.recent && results.recent.length > 0 ? (
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Company</th>
-                      <th>Role</th>
-                      <th>Location</th>
-                      <th>Distance</th>
-                      <th>Date Verified</th>
-                      <th>Career Website</th>
-                      <th>Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.recent.map((job, idx) => (
-                      <tr key={idx}>
-                        <td>{job.company}</td>
-                        <td>{job.role}</td>
-                        <td>{job.location}</td>
-                        <td>{job.distance || 'N/A'}</td>
-                        <td>{job.date_verified || 'N/A'}</td>
-                        <td>
-                          {job.career_website ? (
-                            <a href={job.career_website} target="_blank" rel="noopener noreferrer">View Posting</a>
-                          ) : 'N/A'}
-                        </td>
-                        <td>{job.notes || 'N/A'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : <p>No currently hiring jobs found.</p>}
-
-            <h3 style={{ marginTop: '2rem', color: '#8a650d' }}>Other Jobs Meeting Criteria (Not Currently Hiring)</h3>
-            {results.older && results.older.length > 0 ? (
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Company</th>
-                      <th>Role</th>
-                      <th>Location</th>
-                      <th>Distance</th>
-                      <th>Date Verified</th>
-                      <th>Career Website</th>
-                      <th>Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.older.map((job, idx) => (
-                      <tr key={idx}>
-                        <td>{job.company}</td>
-                        <td>{job.role}</td>
-                        <td>{job.location}</td>
-                        <td>{job.distance || 'N/A'}</td>
-                        <td>{job.date_verified || 'N/A'}</td>
-                        <td>
-                          {job.career_website ? (
-                            <a href={job.career_website} target="_blank" rel="noopener noreferrer">View Posting</a>
-                          ) : 'N/A'}
-                        </td>
-                        <td>{job.notes || 'N/A'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : <p>No other matching jobs found.</p>}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    </section>
+    {loading && <p className="search-loading" role="status">Searching opportunities...</p>}
+    {!loading && results && <JobGroups results={results} onSelect={setSelection} />}
+    {!loading && !results && <div className="empty-state search-start"><Search size={28} /><h2>A good opportunity starts with a search</h2><p>Choose a company or use job types and a location to narrow your results.</p></div>}
+    {selection && <InformationPane selection={selection} onClose={() => setSelection(null)} />}
+  </div>;
 }
-
 export default HotJobSearch;

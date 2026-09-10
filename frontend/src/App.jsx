@@ -10,6 +10,7 @@ import HotJobsReview from './pages/HotJobsReview';
 import AssignedJobSeekersList from './pages/AssignedJobSeekersList';
 import AdminPage from './pages/AdminPage';
 import Shell from './components/Shell';
+import ThemeProvider from './components/ThemeProvider';
 import Home from './pages/Home';
 import UniversalSearch from './pages/UniversalSearch';
 import { AppsPage, CreatePage, MapPage } from './pages/WorkspacePages';
@@ -34,7 +35,7 @@ export default function App() {
   }, []);
   const handleLogin = data => { localStorage.setItem('goodjobnet_user', JSON.stringify(data)); setUser(data); };
   const handleLogout = () => { localStorage.removeItem('goodjobnet_user'); sessionStorage.removeItem('seeker_search_inputs'); sessionStorage.removeItem('seeker_search_results'); setUser(null); };
-  return <BrowserRouter><Routes>
+  return <ThemeProvider><BrowserRouter><Routes>
     <Route path="/login" element={<SignInRoute user={user} onLogin={handleLogin} />} />
     <Route element={<Shell user={user} onLogout={handleLogout} />}>
       <Route path="/" element={<Home user={user} />} />
@@ -59,5 +60,5 @@ export default function App() {
       </Route>
       <Route path="*" element={<div className="workspace-page empty-state"><h1>Page not found</h1><p>Choose an app from the left to keep going.</p></div>} />
     </Route>
-  </Routes></BrowserRouter>;
+  </Routes></BrowserRouter></ThemeProvider>;
 }

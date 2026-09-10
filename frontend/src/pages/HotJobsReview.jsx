@@ -1504,7 +1504,7 @@ function HotJobsReview({ user }) {
                 <select
                   value={callMethod}
                   onChange={e => setCallMethod(e.target.value)}
-                  style={{ background: 'white', color: 'var(--text-dark)', border: '1px solid #ced4da', padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.85rem', cursor: 'pointer', outline: 'none' }}
+                  style={{ background: 'var(--surface)', color: 'var(--text-dark)', border: '1px solid #ced4da', padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.85rem', cursor: 'pointer', outline: 'none' }}
                 >
                   <option value="google-voice">Google Voice (Automated)</option>
                   <option value="phone-link">Phone Link (Automated)</option>
@@ -1717,7 +1717,7 @@ function HotJobsReview({ user }) {
           })()}
 
           {message && (
-            <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? '#27ae60' : '#c0392b' }}>
+            <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? 'var(--success)' : 'var(--error)' }}>
               {message}
             </div>
           )}
