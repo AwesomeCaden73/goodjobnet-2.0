@@ -33,6 +33,8 @@ SPREADSHEET_ID_JOBS = '1YIGS6DRmnEH3be9TG59nFVhGee2DVcc4MaaXFhKgSic'
 WORKSHEET_NAME_JOBS = 'Sheet1'
 SPREADSHEET_NAME_SEEKERS = 'GoodJobNet_JobSeekers' # Name of new sheet to create
 WORKSHEET_NAME_SEEKERS = 'Sheet1'
+SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT = '1khmTUewP3EJremrR388R4-rjLZ8ej0RcnGyCfLFYpuY'
+
 
 _gsheets_client = None
 
@@ -3265,6 +3267,98 @@ def export_jsearch_jobs():
         garbage_collector.collect()
 
 
+def parse_csv_complex_field(val):
+    if not val or not str(val).strip():
+        return ""
+    val_str = str(val).strip()
+    try:
+        data = json.loads(val_str)
+        if isinstance(data, list):
+            items = []
+            for item in data:
+                if isinstance(item, dict) and 'Value' in item:
+                    v = str(item['Value']).strip()
+                    if v:
+                        items.append(v)
+                elif isinstance(item, str):
+                    v = item.strip()
+                    if v:
+                        items.append(v)
+            return ", ".join(items)
+        elif isinstance(data, dict) and 'Value' in data:
+            return str(data['Value']).strip()
+    except Exception:
+        pass
+    return val_str
+
+
+@app.route('/api/sync-jobseekers-csv-to-drive', methods=['POST'])
+def sync_jobseekers_csv_to_drive():
+    try:
+        csv_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'datafiles', 'JobSeekerList.csv')
+        if not os.path.exists(csv_file_path):
+            csv_file_path = os.path.join(os.path.dirname(__file__), '..', 'datafiles', 'JobSeekerList.csv')
+            if not os.path.exists(csv_file_path):
+                return jsonify({"success": False, "error": "datafiles/JobSeekerList.csv file not found."}), 400
+
+        headers = [
+            'Full Name',
+            'Employment Advisor',
+            'Phone',
+            'City',
+            'Street Address',
+            'ZipCode',
+            'Desired Job Types',
+            'Special Considerations',
+            'Engagement Level',
+            'Comments'
+        ]
+
+        matrix = [headers]
+
+        with open(csv_file_path, mode='r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                row = [
+                    r.get('FullName', '').strip(),
+                    r.get('EmploymentAdvisor', '').strip(),
+                    r.get('Phone', '').strip(),
+                    r.get('City', '').strip(),
+                    r.get('StreetAddress', '').strip(),
+                    r.get('ZipCode', '').strip(),
+                    parse_csv_complex_field(r.get('JobTypesDesired')),
+                    parse_csv_complex_field(r.get('SpecialConsiderations')),
+                    parse_csv_complex_field(r.get('EngagementLevel')),
+                    r.get('Comments', '').strip()
+                ]
+                matrix.append(row)
+
+        gc = get_gsheets_client()
+        sh = gc.open_by_key(SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT)
+        wks = sh.sheet1
+
+        # Delete any pre-existing data on the Google Drive file
+        wks.clear()
+
+        # Update Google Drive file with translated human-readable data
+        wks.update_values(crange='A1', values=matrix)
+
+        sheet_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT}/edit#gid=0"
+
+        return jsonify({
+            "success": True,
+            "message": f"Successfully translated data from JobSeekerList.csv and saved {len(matrix) - 1} records to Google Drive!",
+            "count": len(matrix) - 1,
+            "url": sheet_url
+        })
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": "Error syncing JobSeeker CSV to Google Drive", "details": str(e)}), 500
+    finally:
+        garbage_collector.collect()
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000, host="0.0.0.0")
+
 
