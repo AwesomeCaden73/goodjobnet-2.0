@@ -9,6 +9,14 @@ import InformationAndHelp from './pages/InformationAndHelp';
 import HotJobsReview from './pages/HotJobsReview';
 import AssignedJobSeekersList from './pages/AssignedJobSeekersList';
 import AdminPage from './pages/AdminPage';
+
+// Manual Version Configuration - Update this string to change the application version displayed in the header
+
+const APP_VERSION = "Beta v0.24";
+
+
+
+function TopBar({ user, handleLogout }) {
 import Shell from './components/Shell';
 import ThemeProvider from './components/ThemeProvider';
 import Home from './pages/Home';
