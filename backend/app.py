@@ -417,7 +417,9 @@ def submit_job():
             gc = get_gsheets_client()
             sh = gc.open_by_key(SPREADSHEET_ID_JOBS)
             wks = sh.worksheet_by_title(WORKSHEET_NAME_JOBS)
-            wks.append_table(values=[row_data])
+            col1_vals = wks.get_col(1, include_tailing_empty=False)
+            next_row = len(col1_vals) + 1
+            wks.update_values(crange=f'A{next_row}', values=[row_data])
             invalidate_cache('new_jobs_records')
             invalidate_cache('master_jobs_records')
             return jsonify({"success": True, "message": "Job successfully added to Google Sheets!"})
@@ -1619,7 +1621,9 @@ def register():
             "PasswordHash": generate_password_hash(data.get("password", ""))
         }
         row_data = [row_dict.get(h, "") for h in headers]
-        wks.append_table(values=[row_data])
+        col1_vals = wks.get_col(1, include_tailing_empty=False)
+        next_row = len(col1_vals) + 1
+        wks.update_values(crange=f'A{next_row}', values=[row_data])
         invalidate_cache('users_records')
         return jsonify({"success": True, "role": role})
     except Exception as e:
@@ -3035,7 +3039,7 @@ def export_jsearch_jobs():
 
         wks_postings.clear(start='A2')
         if manual_rows:
-            wks_postings.append_table(values=manual_rows)
+            wks_postings.update_values(crange='A2', values=manual_rows)
 
         # Build existing keys set from preserved manual rows
         existing_keys = set()
@@ -3251,9 +3255,11 @@ def export_jsearch_jobs():
                 all_new_rows.append(row_vals)
                 total_fetched += 1
 
-        # 5. Append new rows to 'Job_Postings' worksheet
+        # 5. Append new rows to 'Job_Postings' worksheet starting at Column A
         if all_new_rows:
-            wks_postings.append_table(values=all_new_rows)
+            col1_vals = wks_postings.get_col(1, include_tailing_empty=False)
+            next_row = max(2, len(col1_vals) + 1)
+            wks_postings.update_values(crange=f'A{next_row}', values=all_new_rows)
 
         dup_msg = f" ({skipped_duplicates} existing duplicate job(s) skipped)" if skipped_duplicates > 0 else ""
 
