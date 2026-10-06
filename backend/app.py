@@ -1027,6 +1027,35 @@ def update_hot_job():
         garbage_collector.collect()
 
 
+@app.route('/api/delete-hot-job', methods=['POST'])
+def delete_hot_job():
+    data = request.json
+    if not data or not data.get("row_index"):
+        return jsonify({"success": False, "error": "No row_index provided"}), 400
+        
+    try:
+        gc = get_gsheets_client()
+        try:
+            sh = gc.open_by_key("1NxDQTta3xvch5jn_j-DpWvGg0zRfJhpGnLv9rFQxw6I")
+        except Exception:
+            sh = gc.open_by_key(SPREADSHEET_ID_JOBS)
+            
+        try:
+            wks = sh.worksheet_by_title("Destinations")
+        except Exception:
+            wks = sh.sheet1
+
+        row_index = int(data.get("row_index"))
+        wks.delete_rows(row_index)
+        invalidate_cache('master_jobs_records')
+        return jsonify({"success": True, "message": "Job successfully deleted from spreadsheet!"})
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": "Server Error", "details": str(e)}), 500
+    finally:
+        garbage_collector.collect()
+
+
 @app.route('/api/update-seeker', methods=['POST'])
 def update_seeker():
     data = request.json
