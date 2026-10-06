@@ -1,9 +1,11 @@
 import os
 import csv
 import json
+import io
 import pygsheets
 
 SERVICE_ACCOUNT_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend', 'credentials.json')
+CSV_DRIVE_ID = '15rGolLs1_3u8qEbtZyrGZGGrtzLWoV3I'
 CSV_FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'datafiles', 'JobSeekerList.csv')
 SPREADSHEET_ID = '1khmTUewP3EJremrR388R4-rjLZ8ej0RcnGyCfLFYpuY'
 
@@ -31,9 +33,35 @@ def parse_complex_field(val):
         pass
     return val_str
 
+def fetch_csv_content_from_drive(gc, drive_id=CSV_DRIVE_ID):
+    file_meta = gc.drive.service.files().get(fileId=drive_id, fields='id, name, mimeType').execute()
+    target_file_id = drive_id
+    if file_meta.get('mimeType') == 'application/vnd.google-apps.folder':
+        query = f"'{drive_id}' in parents and trashed = false"
+        res = gc.drive.service.files().list(q=query, fields='files(id, name, mimeType)').execute()
+        files = res.get('files', [])
+        csv_file = next((f for f in files if f.get('name') == 'JobSeekerList.csv'), None)
+        if not csv_file:
+            csv_file = next((f for f in files if f.get('name', '').endswith('.csv')), None)
+        if not csv_file:
+            raise FileNotFoundError(f"No CSV file found in Google Drive folder {drive_id}")
+        target_file_id = csv_file['id']
+    
+    content = gc.drive.service.files().get_media(fileId=target_file_id).execute()
+    return content.decode('utf-8-sig')
+
 def sync_jobseekers_csv_to_drive():
-    if not os.path.exists(CSV_FILE_PATH):
-        raise FileNotFoundError(f"CSV file not found at {CSV_FILE_PATH}")
+    if "GOOGLE_CREDENTIALS" in os.environ:
+        try:
+            gc = pygsheets.authorize(service_account_env_var='GOOGLE_CREDENTIALS')
+        except Exception:
+            gc = pygsheets.authorize(service_file=SERVICE_ACCOUNT_FILE)
+    else:
+        gc = pygsheets.authorize(service_file=SERVICE_ACCOUNT_FILE)
+
+    csv_data = fetch_csv_content_from_drive(gc, CSV_DRIVE_ID)
+    reader = csv.DictReader(io.StringIO(csv_data))
+    source_desc = f"Google Drive (ID: {CSV_DRIVE_ID})"
 
     headers = [
         'Full Name',
@@ -49,33 +77,22 @@ def sync_jobseekers_csv_to_drive():
     ]
 
     matrix = [headers]
+    for r in reader:
+        row = [
+            r.get('FullName', '').strip(),
+            r.get('EmploymentAdvisor', '').strip(),
+            r.get('Phone', '').strip(),
+            r.get('City', '').strip(),
+            r.get('StreetAddress', '').strip(),
+            r.get('ZipCode', '').strip(),
+            parse_complex_field(r.get('JobTypesDesired')),
+            parse_complex_field(r.get('SpecialConsiderations')),
+            parse_complex_field(r.get('EngagementLevel')),
+            r.get('Comments', '').strip()
+        ]
+        matrix.append(row)
 
-    with open(CSV_FILE_PATH, mode='r', encoding='utf-8-sig') as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            row = [
-                r.get('FullName', '').strip(),
-                r.get('EmploymentAdvisor', '').strip(),
-                r.get('Phone', '').strip(),
-                r.get('City', '').strip(),
-                r.get('StreetAddress', '').strip(),
-                r.get('ZipCode', '').strip(),
-                parse_complex_field(r.get('JobTypesDesired')),
-                parse_complex_field(r.get('SpecialConsiderations')),
-                parse_complex_field(r.get('EngagementLevel')),
-                r.get('Comments', '').strip()
-            ]
-            matrix.append(row)
-
-    print(f"Prepared {len(matrix) - 1} rows of data from {CSV_FILE_PATH}.")
-
-    if "GOOGLE_CREDENTIALS" in os.environ:
-        try:
-            gc = pygsheets.authorize(service_account_env_var='GOOGLE_CREDENTIALS')
-        except Exception:
-            gc = pygsheets.authorize(service_file=SERVICE_ACCOUNT_FILE)
-    else:
-        gc = pygsheets.authorize(service_file=SERVICE_ACCOUNT_FILE)
+    print(f"Prepared {len(matrix) - 1} rows of data from {source_desc}.")
 
     sh = gc.open_by_key(SPREADSHEET_ID)
     wks = sh.sheet1

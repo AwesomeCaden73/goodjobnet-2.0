@@ -1027,6 +1027,35 @@ def update_hot_job():
         garbage_collector.collect()
 
 
+@app.route('/api/delete-hot-job', methods=['POST'])
+def delete_hot_job():
+    data = request.json
+    if not data or not data.get("row_index"):
+        return jsonify({"success": False, "error": "No row_index provided"}), 400
+        
+    try:
+        gc = get_gsheets_client()
+        try:
+            sh = gc.open_by_key("1NxDQTta3xvch5jn_j-DpWvGg0zRfJhpGnLv9rFQxw6I")
+        except Exception:
+            sh = gc.open_by_key(SPREADSHEET_ID_JOBS)
+            
+        try:
+            wks = sh.worksheet_by_title("Destinations")
+        except Exception:
+            wks = sh.sheet1
+
+        row_index = int(data.get("row_index"))
+        wks.delete_rows(row_index)
+        invalidate_cache('master_jobs_records')
+        return jsonify({"success": True, "message": "Job successfully deleted from spreadsheet!"})
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": "Server Error", "details": str(e)}), 500
+    finally:
+        garbage_collector.collect()
+
+
 @app.route('/api/update-seeker', methods=['POST'])
 def update_seeker():
     data = request.json
@@ -3295,11 +3324,23 @@ def parse_csv_complex_field(val):
 @app.route('/api/sync-jobseekers-csv-to-drive', methods=['POST'])
 def sync_jobseekers_csv_to_drive():
     try:
-        csv_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'datafiles', 'JobSeekerList.csv')
-        if not os.path.exists(csv_file_path):
-            csv_file_path = os.path.join(os.path.dirname(__file__), '..', 'datafiles', 'JobSeekerList.csv')
-            if not os.path.exists(csv_file_path):
-                return jsonify({"success": False, "error": "datafiles/JobSeekerList.csv file not found."}), 400
+        gc = get_gsheets_client()
+        drive_id = '15rGolLs1_3u8qEbtZyrGZGGrtzLWoV3I'
+        file_meta = gc.drive.service.files().get(fileId=drive_id, fields='id, name, mimeType').execute()
+        target_file_id = drive_id
+        if file_meta.get('mimeType') == 'application/vnd.google-apps.folder':
+            query = f"'{drive_id}' in parents and trashed = false"
+            res = gc.drive.service.files().list(q=query, fields='files(id, name, mimeType)').execute()
+            files = res.get('files', [])
+            csv_file = next((f for f in files if f.get('name') == 'JobSeekerList.csv'), None)
+            if not csv_file:
+                csv_file = next((f for f in files if f.get('name', '').endswith('.csv')), None)
+            if not csv_file:
+                return jsonify({"success": False, "error": f"No CSV file found in Google Drive folder {drive_id}."}), 400
+            target_file_id = csv_file['id']
+        content = gc.drive.service.files().get_media(fileId=target_file_id).execute()
+        csv_text = content.decode('utf-8-sig')
+        reader = csv.DictReader(io.StringIO(csv_text))
 
         headers = [
             'Full Name',
@@ -3316,22 +3357,20 @@ def sync_jobseekers_csv_to_drive():
 
         matrix = [headers]
 
-        with open(csv_file_path, mode='r', encoding='utf-8-sig') as f:
-            reader = csv.DictReader(f)
-            for r in reader:
-                row = [
-                    r.get('FullName', '').strip(),
-                    r.get('EmploymentAdvisor', '').strip(),
-                    r.get('Phone', '').strip(),
-                    r.get('City', '').strip(),
-                    r.get('StreetAddress', '').strip(),
-                    r.get('ZipCode', '').strip(),
-                    parse_csv_complex_field(r.get('JobTypesDesired')),
-                    parse_csv_complex_field(r.get('SpecialConsiderations')),
-                    parse_csv_complex_field(r.get('EngagementLevel')),
-                    r.get('Comments', '').strip()
-                ]
-                matrix.append(row)
+        for r in reader:
+            row = [
+                r.get('FullName', '').strip(),
+                r.get('EmploymentAdvisor', '').strip(),
+                r.get('Phone', '').strip(),
+                r.get('City', '').strip(),
+                r.get('StreetAddress', '').strip(),
+                r.get('ZipCode', '').strip(),
+                parse_csv_complex_field(r.get('JobTypesDesired')),
+                parse_csv_complex_field(r.get('SpecialConsiderations')),
+                parse_csv_complex_field(r.get('EngagementLevel')),
+                r.get('Comments', '').strip()
+            ]
+            matrix.append(row)
 
         gc = get_gsheets_client()
         sh = gc.open_by_key(SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT)

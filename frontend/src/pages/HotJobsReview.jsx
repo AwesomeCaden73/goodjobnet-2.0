@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { FaMicrophone, FaVolumeUp, FaPhone, FaArrowLeft, FaArrowRight, FaSave, FaExclamationTriangle } from 'react-icons/fa';
+import { FaMicrophone, FaVolumeUp, FaPhone, FaArrowLeft, FaArrowRight, FaSave, FaExclamationTriangle, FaTrash } from 'react-icons/fa';
 
 const JOB_OPTIONS = [
   "HVAC Repair", "Accountant", "Airport (Baggage/customer service/ground ops)",
@@ -22,6 +22,7 @@ function HotJobsReview({ user }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState('');
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
@@ -1029,8 +1030,10 @@ function HotJobsReview({ user }) {
               speak("Saving job details.");
               formRef.current.requestSubmit();
             }
+          } else if (transcriptLower.includes("delete job") || transcriptLower.includes("delete this job") || transcriptLower === "delete") {
+            handleDeleteJob();
           } else if (transcriptLower.includes("help")) {
-            speak("Voice commands are: next job, previous job, read details, update company type, update job types, update currently hiring status, update notes, call company, pause, save, or help.");
+            speak("Voice commands are: next job, previous job, read details, update company type, update job types, update currently hiring status, update notes, call company, pause, save, delete job, or help.");
           }
         };
 
@@ -1340,6 +1343,63 @@ function HotJobsReview({ user }) {
     setSaving(false);
   };
 
+  const handleDeleteJob = async () => {
+    const job = jobsRef.current[currentIndexRef.current];
+    if (!job || !job.row_index) return;
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete "${job.company_name || 'this job'}" from the spreadsheet? This action cannot be undone.`
+    );
+    if (!confirmDelete) return;
+
+    setDeleting(true);
+    setMessage('');
+    setSuccess(false);
+
+    try {
+      const response = await fetch('/api/delete-hot-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ row_index: job.row_index })
+      });
+      const result = await response.json();
+      if (result.success) {
+        setSuccess(true);
+        playChirp('success');
+        setMessage(result.message || 'Job successfully deleted!');
+
+        if (voiceActiveRef.current) {
+          speak('Job successfully deleted from spreadsheet.');
+        }
+
+        const updatedJobs = jobsRef.current.filter((_, idx) => idx !== currentIndexRef.current);
+        if (updatedJobs.length === 0) {
+          setJobs([]);
+        } else {
+          setJobs(updatedJobs);
+          if (currentIndexRef.current >= updatedJobs.length) {
+            setCurrentIndex(updatedJobs.length - 1);
+          }
+        }
+      } else {
+        setSuccess(false);
+        playChirp('error');
+        if (voiceActiveRef.current) {
+          speak('Failed to delete job: ' + (result.error || 'Unknown error'));
+        }
+        setMessage(result.error || 'Failed to delete job.');
+      }
+    } catch (err) {
+      setSuccess(false);
+      playChirp('error');
+      if (voiceActiveRef.current) {
+        speak('Error connecting to server.');
+      }
+      setMessage('Error connecting to server.');
+    }
+    setDeleting(false);
+  };
+
   if (!categorySelected) {
     return (
       <div className="app-container">
@@ -1571,6 +1631,7 @@ function HotJobsReview({ user }) {
                 <span>• "Pause"</span>
                 <span>• "Resume"</span>
                 <span>• "Save"</span>
+                <span>• "Delete job"</span>
                 <span>• "Help"</span>
               </div>
 
@@ -1722,10 +1783,22 @@ function HotJobsReview({ user }) {
             </div>
           )}
 
-          <div className="actions mt-2 mb-1" style={{ display: 'flex', gap: '1rem' }}>
-            <button type="button" className="btn secondary-btn" onClick={handleGoBack}>Cancel</button>
-            <button type="submit" className="btn primary-btn" disabled={saving}>
-              {saving ? 'Updating...' : 'Update Job'}
+          <div className="actions mt-2 mb-1" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button type="button" className="btn secondary-btn" onClick={handleGoBack}>Cancel</button>
+              <button type="submit" className="btn primary-btn" disabled={saving || deleting}>
+                {saving ? 'Updating...' : 'Update Job'}
+              </button>
+            </div>
+            <button
+              type="button"
+              className="btn secondary-btn"
+              onClick={handleDeleteJob}
+              disabled={saving || deleting}
+              style={{ background: '#e74c3c', color: 'white', border: 'none', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+            >
+              <FaTrash />
+              {deleting ? 'Deleting...' : 'Delete Job'}
             </button>
           </div>
         </form>
