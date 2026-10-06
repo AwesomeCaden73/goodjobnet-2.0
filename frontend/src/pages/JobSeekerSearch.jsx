@@ -1,25 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { Search, Users, MapPin, RotateCcw } from 'lucide-react';
+import { PersonCard, JobGroups } from '../components/SearchCards';
+import InformationPane from '../components/InformationPane';
 
-const JOB_OPTIONS = [
-  "HVAC Repair", "Accountant", "Airport (Baggage/customer service/ground ops)",
-  "Auto Parts", "Car Wash Attendant", "Cashier", "Catering", "CDL Driver",
-  "Cement Mason/finisher", "Computer / IT", "Computer Programmer", "Construction",
-  "Corrections", "Custodian", "Customer service", "Data Entry", "Day Care / Preschool",
-  "Delivery Driver", "Drywaller", "Educator", "Electrician", "Engineering",
-  "Event Staff", "Fast food", "Gas Station Attendant", "Grocery Store",
-  "Healthcare", "Hotel/Hospitality", "Housekeeper", "Information Technology (IT)",
-  "Landscaping", "Manager (Department/Project)", "Manager (Store/Crew)", "Mechanic",
-  "Manufacturing", "Nursing", "Painter", "Pest Control", "Plumbing",
-  "Restaurant (Cook/Waiter/Host)", "Retail", "Sales", "Security", "Stocking",
-  "Telephone/Call Center/Scheduling", "Theme Park", "Trucking/Transportation",
-  "Warehousing/Logistics"
-];
+import JobTypePicker from '../components/JobTypePicker';
+import ZipOnlyToggle from '../components/ZipOnlyToggle';
+import { enteredZip, zipOnlySeekers } from '../zipSearch';
+import { JOB_TYPES as JOB_OPTIONS } from '../components/jobTypes';
 
-function JobSeekerSearch({ user }) {
+function JobSeekerSearch() {
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const [selection, setSelection] = useState(null);
   const location = useLocation();
+  const formRef = useRef(null);
+  const resultsRef = useRef(null);
+  const requestRef = useRef(null);
+  const [error, setError] = useState('');
+  const [searchContext, setSearchContext] = useState(null);
+  useEffect(() => () => requestRef.current?.abort(), []);
   
   const [savedInputs, setSavedInputs] = useState(() => {
     const saved = sessionStorage.getItem('seeker_search_inputs');
@@ -27,6 +26,14 @@ function JobSeekerSearch({ user }) {
   });
 
   const [results, setResults] = useState(null);
+  useEffect(() => {
+    if (!results) return;
+    const frame = requestAnimationFrame(() => {
+      resultsRef.current?.focus({ preventScroll: true });
+      resultsRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [results]);
   const [selectedJobTypes, setSelectedJobTypes] = useState(savedInputs.job_types || []);
 
   const [selectedSeeker, setSelectedSeeker] = useState(null);
@@ -74,16 +81,29 @@ function JobSeekerSearch({ user }) {
   }, [results, loadMatchingJobs]);
 
   const performSearch = useCallback(async (searchParams) => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
-    
+    setError('');
+    setSelection(null);
+
     // Store inputs in state & session storage
     const inputs = {
       name: searchParams.name || '',
       job_types: searchParams.job_types || [],
       address: searchParams.address || '',
       radius: searchParams.radius || '20',
-      other_job_type: searchParams.other_job_type || ''
+      other_job_type: searchParams.other_job_type || '',
+      zip_only: searchParams.zip_only === true
     };
+    const zip = enteredZip(inputs.address);
+    if (inputs.zip_only && !zip) {
+      setError('Enter a five-digit ZIP code in Location to use ZIP-only search.');
+      setLoading(false);
+      formRef.current.elements.address.focus();
+      return;
+    }
     setSavedInputs(inputs);
     setSelectedJobTypes(inputs.job_types);
     sessionStorage.setItem('seeker_search_inputs', JSON.stringify(inputs));
@@ -97,29 +117,32 @@ function JobSeekerSearch({ user }) {
     const data = {
       name: inputs.name,
       job_types: combinedJobTypes,
-      address: inputs.address,
-      radius: inputs.radius
+      address: inputs.zip_only ? zip : inputs.address,
+      radius: inputs.zip_only ? '0' : inputs.radius
     };
 
     try {
       const response = await fetch('/api/search-seekers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        signal: controller.signal
       });
       const resultData = await response.json();
 
-      if (resultData.success) {
-        setResults(resultData.results);
-        sessionStorage.setItem('seeker_search_results', JSON.stringify(resultData.results));
+      if (controller.signal.aborted) return;
+      if (response.ok && resultData.success) {
+        setSearchContext(inputs);
+        const filtered = inputs.zip_only ? zipOnlySeekers(resultData.results, zip) : resultData.results;
+        setResults(filtered);
+        sessionStorage.setItem('seeker_search_results', JSON.stringify(filtered));
       } else {
-        alert('Search failed: ' + (resultData.error || 'Unknown error'));
+        setError(resultData.error || 'Search could not be completed. Please try again.');
       }
     } catch (err) {
-      console.error(err);
-      alert('Network error - Is your backend server running?');
+      if (err.name !== 'AbortError') setError('Search could not be completed. Please try again.');
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, []);
 
@@ -152,6 +175,7 @@ function JobSeekerSearch({ user }) {
         }
         if (savedInp) {
           const parsedInp = JSON.parse(savedInp);
+          setSearchContext(parsedInp);
           setSavedInputs(parsedInp);
           setSelectedJobTypes(parsedInp.job_types || []);
         }
@@ -181,263 +205,49 @@ function JobSeekerSearch({ user }) {
       job_types: jobTypes,
       address,
       radius,
-      other_job_type: otherJobType
+      other_job_type: otherJobType,
+      zip_only: savedInputs.zip_only === true
     });
   };
 
-  return (
-    <div className="app-container" style={{ flexDirection: 'column', maxWidth: '1400px' }}>
-      <div className="glass-panel main-form" style={{ maxWidth: '1300px' }}>
-        <header>
-          <h1>Job Seeker Search</h1>
-          <p className="subtitle">Find unemployed individuals interested in a job type within a certain radius of an address</p>
-        </header>
-
-        <form onSubmit={handleSearch}>
-          <div className="form-grid">
-            <div className="input-group full-width">
-              <label htmlFor="jobseekersearch-name">Search by Name (Optional - Bypasses job types and location filters)</label>
-              <input id="jobseekersearch-name" type="text" name="name" placeholder="Enter seeker name..." defaultValue={savedInputs.name || ''} />
-              <div style={{ fontSize: '0.9rem', color: 'var(--text-light)', marginTop: '0.6rem', fontWeight: '500' }}>
-                OR, search by job type(s) and radius from given location
-              </div>
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="jobseekersearch-job_type">Job Type (Hold Ctrl/Cmd to select multiple)</label>
-              <select id="jobseekersearch-job_type"
-                name="job_type" 
-                multiple 
-                size="4"
-                value={selectedJobTypes}
-                onChange={e => setSelectedJobTypes(Array.from(e.target.selectedOptions, opt => opt.value))}
-              >
-                {JOB_OPTIONS.map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="jobseekersearch-address">Find individuals near this location (Street, City, Zipcode)</label>
-              <textarea id="jobseekersearch-address" name="address" rows="4" placeholder="Enter full address including zip code... (e.g. 32801)" defaultValue={savedInputs.address}></textarea>
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="jobseekersearch-other_job_type">Other Job Type (Not in list)</label>
-              <input id="jobseekersearch-other_job_type" type="text" name="other_job_type" placeholder="Enter other job type..." defaultValue={savedInputs.other_job_type} />
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="jobseekersearch-radius">List individuals within radius of (miles)</label>
-              <input id="jobseekersearch-radius" type="number" name="radius" defaultValue={savedInputs.radius || '20'} min="1" required />
-            </div>
-          </div>
-
-          <div className="actions mt-2 text-center">
-            <button type="submit" className="btn primary-btn" style={{ maxWidth: '300px' }} disabled={loading}>
-              {loading ? 'Searching...' : 'Look for potential job seekers'}
-            </button>
-            <button type="button" className="btn secondary-btn" style={{ maxWidth: '300px', marginLeft: '1rem' }} onClick={() => navigate(user?.role === 'admin' ? '/employment-dashboard' : '/dashboard')}>
-              Back to Dashboard
-            </button>
-          </div>
-        </form>
-
-        {results && (
-          <div className="results-section mt-2">
-            <h2>Search Results</h2>
-            
-            <div style={{ marginTop: '1.5rem' }}>
-              <h3 style={{ borderBottom: '2px solid var(--primary-color)', paddingBottom: '0.4rem', marginBottom: '0.8rem', color: 'var(--primary-color)' }}>
-                Job Seekers Within Radius ({results.nearby ? results.nearby.length : 0})
-              </h3>
-              {(() => {
-                const list = results.nearby;
-                if (!list || list.length === 0) {
-                  return <p style={{ fontStyle: 'italic', color: 'var(--text-light)', marginTop: '0.5rem', marginBottom: '1.5rem' }}>No job seekers found matching the criteria within the specified radius.</p>;
-                }
-                return (
-                  <div className="table-container mb-2">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Name</th>
-                          <th>Address</th>
-                          <th>Phone</th>
-                          <th>Email</th>
-                          <th>Job Types</th>
-                          <th>Distance</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {list.map((seeker, idx) => (
-                          <tr key={idx}>
-                            <td style={{ fontWeight: 'bold' }}>
-                              <Link to="/job-seeker-entry" state={{ seeker, fromSearch: true }} style={{ color: 'var(--primary-color)', textDecoration: 'none' }} className="seeker-name-link">
-                                {seeker.name}
-                              </Link>
-                            </td>
-                            <td>{seeker.address || 'N/A'}</td>
-                            <td>{seeker.phone ? <a href={`tel:${seeker.phone}`}>{seeker.phone}</a> : 'N/A'}</td>
-                            <td>{seeker.email ? <a href={`mailto:${seeker.email}`}>{seeker.email}</a> : 'N/A'}</td>
-                            <td>{seeker.job_types}</td>
-                            <td>
-                              {typeof seeker.distance === 'number'
-                                ? `${seeker.distance} mile${seeker.distance === 1 ? '' : 's'}`
-                                : seeker.distance}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div style={{ marginTop: '2rem' }}>
-              <h3 style={{ borderBottom: '2px solid var(--secondary-color)', paddingBottom: '0.4rem', marginBottom: '0.8rem', color: 'var(--secondary-color)' }}>
-                Other Matching Job Seekers (Outside Radius or Address Not Provided) ({results.other ? results.other.length : 0})
-              </h3>
-              {(() => {
-                const list = results.other;
-                if (!list || list.length === 0) {
-                  return <p style={{ fontStyle: 'italic', color: 'var(--text-light)', marginTop: '0.5rem', marginBottom: '1.5rem' }}>No other matching job seekers found.</p>;
-                }
-                return (
-                  <div className="table-container mb-2">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Name</th>
-                          <th>Address</th>
-                          <th>Phone</th>
-                          <th>Email</th>
-                          <th>Job Types</th>
-                          <th>Distance</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {list.map((seeker, idx) => (
-                          <tr key={idx}>
-                            <td style={{ fontWeight: 'bold' }}>
-                              <Link to="/job-seeker-entry" state={{ seeker, fromSearch: true }} style={{ color: 'var(--primary-color)', textDecoration: 'none' }} className="seeker-name-link">
-                                {seeker.name}
-                              </Link>
-                            </td>
-                            <td>{seeker.address || 'N/A'}</td>
-                            <td>{seeker.phone ? <a href={`tel:${seeker.phone}`}>{seeker.phone}</a> : 'N/A'}</td>
-                            <td>{seeker.email ? <a href={`mailto:${seeker.email}`}>{seeker.email}</a> : 'N/A'}</td>
-                            <td>{seeker.job_types}</td>
-                            <td>
-                              {typeof seeker.distance === 'number'
-                                ? `${seeker.distance} mile${seeker.distance === 1 ? '' : 's'}`
-                                : seeker.distance}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {selectedSeeker && (
-              <div className="matching-jobs-section mt-3" style={{ borderTop: '2px solid rgba(0,0,0,0.1)', paddingTop: '2rem', marginTop: '2rem' }}>
-                <h2 style={{ color: 'var(--primary-color)', marginBottom: '0.5rem' }}>Matching Jobs for {selectedSeeker.name}</h2>
-                <p style={{ fontStyle: 'italic', color: 'var(--text-light)', marginBottom: '1.5rem' }}>
-                  Based on desired job types: <strong>{selectedSeeker.job_types || selectedSeeker.desired_job_types}</strong>
-                </p>
-                {matchingJobsLoading ? (
-                  <p className="text-center">Loading matching jobs from JobBank...</p>
-                ) : (
-                  <>
-                    <h3 style={{ marginTop: '1.5rem', color: 'var(--success)', borderBottom: '2px solid #2ecc71', paddingBottom: '0.4rem', marginBottom: '0.8rem' }}>
-                      Currently Hiring Jobs ({matchingJobs.recent.length})
-                    </h3>
-                    {matchingJobs.recent.length > 0 ? (
-                      <div className="table-container mb-2">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Company</th>
-                              <th>Role</th>
-                              <th>Location</th>
-                              <th>Distance</th>
-                              <th>Career Website</th>
-                              <th>Notes</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {matchingJobs.recent.map((job, idx) => (
-                              <tr key={idx}>
-                                <td>{job.company}</td>
-                                <td>{job.role}</td>
-                                <td>{job.location}</td>
-                                <td>{job.distance || 'N/A'}</td>
-                                <td>
-                                  {job.career_website ? (
-                                    <a href={job.career_website} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: '500' }}>
-                                      View Posting
-                                    </a>
-                                  ) : 'N/A'}
-                                </td>
-                                <td>{job.notes || 'N/A'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : <p style={{ fontStyle: 'italic', color: 'var(--text-light)', marginBottom: '1.5rem' }}>No currently hiring jobs found matching criteria.</p>}
-
-                    <h3 style={{ marginTop: '2rem', color: '#8a650d', borderBottom: '2px solid #f39c12', paddingBottom: '0.4rem', marginBottom: '0.8rem' }}>
-                      Other Jobs Meeting Criteria (Not Currently Hiring) ({matchingJobs.older.length})
-                    </h3>
-                    {matchingJobs.older.length > 0 ? (
-                      <div className="table-container mb-2">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Company</th>
-                              <th>Role</th>
-                              <th>Location</th>
-                              <th>Distance</th>
-                              <th>Career Website</th>
-                              <th>Notes</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {matchingJobs.older.map((job, idx) => (
-                              <tr key={idx}>
-                                <td>{job.company}</td>
-                                <td>{job.role}</td>
-                                <td>{job.location}</td>
-                                <td>{job.distance || 'N/A'}</td>
-                                <td>
-                                  {job.career_website ? (
-                                    <a href={job.career_website} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: '500' }}>
-                                      View Posting
-                                    </a>
-                                  ) : 'N/A'}
-                                </td>
-                                <td>{job.notes || 'N/A'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : <p style={{ fontStyle: 'italic', color: 'var(--text-light)' }}>No other matching jobs found.</p>}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+  const clearFilters = () => {
+    requestRef.current?.abort();
+    formRef.current.querySelector('details').open = false;
+    setSavedInputs({ name: '', job_types: [], address: '', radius: '20', other_job_type: '' });
+    setSelectedJobTypes([]);
+    setResults(null);
+    setSearchContext(null);
+    setSelectedSeeker(null);
+    setMatchingJobs({ recent: [], older: [] });
+    setLoading(false);
+    setError('');
+    sessionStorage.removeItem('seeker_search_inputs');
+    sessionStorage.removeItem('seeker_search_results');
+    formRef.current.elements.name.focus();
+  };
+  const count = (results?.nearby?.length || 0) + (results?.other?.length || 0);
+  const updateInput = field => e => setSavedInputs(previous => ({ ...previous, [field]: e.target.value }));
+  return <div className="workspace-page search-page streamlined-seeker-search">
+    <div className="page-heading"><div><p className="eyebrow">CONNECT PEOPLE WITH POSSIBILITIES</p><h1>Job Seeker Search</h1><p>Find people by name, job interests, and location.</p></div><Link className="subtle-button" to="/search"><Search size={16} />Universal search</Link></div>
+    <section className="surface combined-job-filter"><form ref={formRef} onSubmit={handleSearch} aria-label="Job seeker search filters">
+      <div className="job-search-primary">
+        <div className="input-group"><label htmlFor="jobseekersearch-name">Name</label><div className="search-field-icon"><Users size={18} /><input id="jobseekersearch-name" name="name" placeholder="Any name" value={savedInputs.name || ''} onChange={updateInput('name')} aria-describedby="seeker-name-hint" /></div></div>
+        <div className="input-group"><label htmlFor="jobseekersearch-address">Location</label><div className="search-field-icon"><MapPin size={18} /><input id="jobseekersearch-address" name="address" placeholder="City or address with ZIP code" value={savedInputs.address || ''} onChange={updateInput('address')} aria-describedby="seeker-location-hint" /></div></div>
+        <div className="input-group"><label htmlFor="jobseekersearch-radius">Radius (miles)</label><input id="jobseekersearch-radius" name="radius" type="number" value={savedInputs.radius || ''} onChange={updateInput('radius')} min="1" disabled={savedInputs.zip_only === true} required={!savedInputs.zip_only} /></div>
       </div>
-    </div>
-  );
+      <div className="zip-filter-row"><ZipOnlyToggle id="seeker-zip-only" checked={savedInputs.zip_only === true} onChange={checked => setSavedInputs(previous => ({ ...previous, zip_only: checked }))} /><span className="muted">Match the entered ZIP exactly instead of using a radius.</span></div>
+      <div className="job-search-secondary"><JobTypePicker selected={selectedJobTypes} onChange={setSelectedJobTypes} /><div className="input-group"><label htmlFor="jobseekersearch-other_job_type">Additional job types</label><input id="jobseekersearch-other_job_type" name="other_job_type" placeholder="Other roles, separated by commas" value={savedInputs.other_job_type || ''} onChange={updateInput('other_job_type')} /></div></div>
+      <div className="job-search-submit"><div className="seeker-filter-hints"><p id="seeker-location-hint" className="muted">Include a five-digit ZIP code to group people by distance.</p><p id="seeker-name-hint" className="muted">Searching by name skips job-type filters.</p></div><div><button type="button" className="subtle-button" onClick={clearFilters}><RotateCcw size={15} />Clear filters</button><button type="submit" className="solid-button" disabled={loading}><Search size={17} />{loading ? 'Searching...' : 'Search job seekers'}</button></div></div>
+    </form></section>
+    {error && <p className="inline-error" role="alert">{error}</p>}
+    {loading && <p className="search-loading" role="status">Searching job seekers...</p>}
+    {!loading && results && <section ref={resultsRef} tabIndex={-1} className="job-search-results" aria-labelledby="seeker-results-heading">
+      <div className="section-heading"><div><h2 id="seeker-results-heading">Search results <span className="result-count">{count}</span></h2><p>{searchContext?.zip_only ? 'Showing people in ZIP ' + enteredZip(searchContext.address) + ' only.' : 'Select a person to view their profile and edit details.'}</p></div><button type="button" className="text-link" onClick={() => { formRef.current.scrollIntoView({ behavior: 'auto', block: 'center' }); formRef.current.elements.name.focus({ preventScroll: true }); }}>Adjust filters</button></div>
+      {count ? [['nearby', searchContext?.name && !searchContext?.address ? 'Name matches' : 'Job seekers within radius'], ['other', 'Other matching job seekers']].map(([key, title]) => <section className="result-section" key={key}><h2>{title} <span className="muted">{results[key]?.length || 0}</span></h2>{key === 'other' && <p>Outside the search radius or without a location.</p>}{results[key]?.length ? <div className="search-result-list">{results[key].map((person, i) => <PersonCard key={person.row_index ?? i} person={person} onSelect={setSelection} />)}</div> : <p className="empty-state">No job seekers in this group match your search.</p>}</section>) : <div className="empty-state search-start"><Search size={28} /><h3>No people match these filters</h3><p>Try another name, a broader job type, or a larger radius.</p></div>}
+      {selectedSeeker && <section className="matching-jobs-section"><h2>Matching Jobs for {selectedSeeker.name}</h2><p>Based on desired job types: {selectedSeeker.job_types || selectedSeeker.desired_job_types}</p>{matchingJobsLoading ? <p role="status">Loading matching jobs...</p> : <JobGroups results={matchingJobs} onSelect={setSelection} />}</section>}
+    </section>}
+    {!loading && !results && <div className="empty-state search-start"><Search size={28} /><h2>Find the people you can help</h2><p>Search by name, or combine job interests and a nearby ZIP code. Leave filters blank to browse.</p></div>}
+    {selection && <InformationPane selection={selection} onClose={() => setSelection(null)} />}
+  </div>;
 }
-
 export default JobSeekerSearch;

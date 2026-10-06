@@ -1,3 +1,4 @@
+import EntryJobTypes from '../components/EntryJobTypes';
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 
@@ -157,15 +158,15 @@ function JobSeekerEntry({ user }) {
   };
 
   return (
-    <div className="app-container">
-      <div className="glass-panel main-form" style={{ maxWidth: seeker ? '1000px' : '700px' }}>
-        <header>
-          <h1>{seeker ? 'Job seeker details' : 'Job Seeker Entry'}</h1>
+    <div className="app-container entry-page">
+      <div className="glass-panel main-form streamlined-entry">
+        <header className="entry-heading"><p className="eyebrow">CREATE A CONNECTION</p>
+          <h1>{seeker ? 'Edit job seeker' : 'Job seeker'}</h1>
           <p className="subtitle">{seeker ? 'Review contact information, employment interests, and matching jobs.' : 'Enter information for an individual seeking employment'}</p>
         </header>
 
         <form onSubmit={handleSubmit}>
-          <div className="form-grid">
+          <fieldset className="entry-section"><legend>Contact & community</legend><p>How can we reach this person?</p><div className="form-grid">
             <div className="input-group full-width">
               <label htmlFor="jobseekerentry-name">Name of Job Seeker <span className="required">*</span></label>
               <input id="jobseekerentry-name" type="text" name="name" defaultValue={seeker?.name || ''} required />
@@ -206,6 +207,7 @@ function JobSeekerEntry({ user }) {
               <input id="jobseekerentry-email" type="email" name="email" defaultValue={seeker?.email || ''} />
             </div>
 
+          </div></fieldset><fieldset className="entry-section"><legend>Employment interests</legend><p>Experience and the opportunities they are looking for.</p><div className="form-grid">
             <div className="input-group full-width">
               <label htmlFor="jobseekerentry-skills_education">Skills/Education</label>
               <textarea id="jobseekerentry-skills_education" name="skills_education" rows="3" placeholder="Enter skills and education..." defaultValue={seeker?.skills_education || ''}></textarea>
@@ -231,63 +233,7 @@ function JobSeekerEntry({ user }) {
             </div>
 
             <div className="input-group full-width">
-              <label htmlFor="jobseekerentry-desired_job_types">Desired Job type(s) (Hold Ctrl/Cmd to select multiple)</label>
-              <select id="jobseekerentry-desired_job_types"
-                name="desired_job_types" 
-                multiple 
-                size="4" 
-                value={selectedJobTypes} 
-                onChange={e => setSelectedJobTypes(Array.from(e.target.selectedOptions, option => option.value))}
-              >
-                <option value="HVAC Repair">HVAC Repair</option>
-                <option value="Accountant">Accountant</option>
-                <option value="Airport (Baggage/customer service/ground ops)">Airport (Baggage/customer service/ground ops)</option>
-                <option value="Auto Parts">Auto Parts</option>
-                <option value="Car Wash Attendant">Car Wash Attendant</option>
-                <option value="Cashier">Cashier</option>
-                <option value="Catering">Catering</option>
-                <option value="CDL Driver">CDL Driver</option>
-                <option value="Cement Mason/finisher">Cement Mason/finisher</option>
-                <option value="Computer / IT">Computer / IT</option>
-                <option value="Computer Programmer">Computer Programmer</option>
-                <option value="Construction">Construction</option>
-                <option value="Corrections">Corrections</option>
-                <option value="Custodian">Custodian</option>
-                <option value="Customer service">Customer service</option>
-                <option value="Data Entry">Data Entry</option>
-                <option value="Day Care / Preschool">Day Care/ Preschool</option>
-                <option value="Delivery Driver">Delivery Driver</option>
-                <option value="Drywaller">Drywaller</option>
-                <option value="Educator">Educator</option>
-                <option value="Electrician">Electrician</option>
-                <option value="Engineering">Engineering</option>
-                <option value="Event Staff">Event Staff</option>
-                <option value="Fast food">Fast food</option>
-                <option value="Gas Station Attendant">Gas Station Attendant</option>
-                <option value="Grocery Store">Grocery Store</option>
-                <option value="Healthcare">Healthcare</option>
-                <option value="Hotel/Hospitality">Hotel/Hospitality</option>
-                <option value="Housekeeper">Housekeeper</option>
-                <option value="Information Technology (IT)">Information Technology (IT)</option>
-                <option value="Landscaping">Landscaping</option>
-                <option value="Manager (Department/Project)">Manager (Department/Project)</option>
-                <option value="Manager (Store/Crew)">Manager (Store/Crew)</option>
-                <option value="Mechanic">Mechanic</option>
-                <option value="Manufacturing">Manufacturing</option>
-                <option value="Nursing">Nursing</option>
-                <option value="Painter">Painter</option>
-                <option value="Pest Control">Pest Control</option>
-                <option value="Plumbing">Plumbing</option>
-                <option value="Restaurant (Cook/Waiter/Host)">Restaurant (Cook/Waiter/Host)</option>
-                <option value="Retail">Retail</option>
-                <option value="Sales">Sales</option>
-                <option value="Security">Security</option>
-                <option value="Stocking">Stocking</option>
-                <option value="Telephone/Call Center/Scheduling">Telephone/Call Center/Scheduling</option>
-                <option value="Theme Park">Theme Park</option>
-                <option value="Trucking/Transportation">Trucking/Transportation</option>
-                <option value="Warehousing/Logistics">Warehousing/Logistics</option>
-              </select>
+              <EntryJobTypes name="desired_job_types" label="Desired job types" selected={selectedJobTypes} onChange={setSelectedJobTypes} />
             </div>
 
             <div className="input-group full-width">
@@ -295,6 +241,7 @@ function JobSeekerEntry({ user }) {
               <input id="jobseekerentry-other_job_type" type="text" name="other_job_type" placeholder="Enter other job type..." defaultValue={customSelected} />
             </div>
 
+          </div></fieldset><fieldset className="entry-section"><legend>Notes & support</legend><p>Record context and requested assistance.</p><div className="form-grid">
             <div className="input-group full-width">
               <label htmlFor="jobseekerentry-general_notes">General Notes</label>
               <textarea id="jobseekerentry-general_notes" name="general_notes" rows="3" placeholder="Any additional notes..." defaultValue={seeker?.general_notes || ''}></textarea>
@@ -315,15 +262,15 @@ function JobSeekerEntry({ user }) {
                 <label htmlFor="job_search_assistance" style={{ margin: 0, fontWeight: 400 }}>Job Search assistance</label>
               </div>
             </div>
-          </div>
+          </div></fieldset>
 
           {message && (
-            <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? '#27ae60' : '#c0392b' }}>
+            <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? 'var(--success)' : 'var(--error)' }}>
               {message}
             </div>
           )}
 
-          <div className="actions mt-2 mb-1" style={{ display: 'flex', gap: '1rem' }}>
+          <div className="actions entry-actions">
             <button 
               type="button" 
               className="btn secondary-btn" 
@@ -337,7 +284,7 @@ function JobSeekerEntry({ user }) {
                 } else if (seeker) {
                   navigate('/job-seeker-search', { state: { keepResults: true } });
                 } else {
-                  navigate(user?.role === 'admin' ? '/employment-dashboard' : '/dashboard');
+                  navigate('/create');
                 }
               }}
             >
@@ -409,7 +356,7 @@ function JobSeekerEntry({ user }) {
                   </div>
                 ) : <p style={{ fontStyle: 'italic', color: 'var(--text-light)', marginBottom: '1.5rem' }}>No currently hiring jobs found matching criteria.</p>}
 
-                <h3 style={{ marginTop: '2rem', color: '#8a650d', borderBottom: '2px solid #f39c12', paddingBottom: '0.4rem', marginBottom: '0.8rem' }}>
+                <h3 style={{ marginTop: '2rem', color: 'var(--warning)', borderBottom: '2px solid #f39c12', paddingBottom: '0.4rem', marginBottom: '0.8rem' }}>
                   Other Jobs Meeting Criteria (Not Currently Hiring) ({matchingJobs.older.length})
                 </h3>
                 {matchingJobs.older.length > 0 ? (
