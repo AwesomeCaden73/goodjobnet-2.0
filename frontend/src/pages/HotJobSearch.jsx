@@ -1,290 +1,97 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { checkedJobResults } from '../jobSearchResults';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Search, BriefcaseBusiness, MapPin, RotateCcw } from 'lucide-react';
+import { JobGroups } from '../components/SearchCards';
+import JobTypePicker from '../components/JobTypePicker';
+import InformationPane from '../components/InformationPane';
+import { hotJobFilters } from '../hotJobFilters';
+import { enteredZip, zipOnlyJobs } from '../zipSearch';
+import ZipOnlyToggle from '../components/ZipOnlyToggle';
 
-function HotJobSearch({ user }) {
+export default function HotJobSearch({ user }) {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
-  const [searchMode, setSearchMode] = useState('type-location');
-  const navigate = useNavigate();
+  const [selection, setSelection] = useState(null);
+  const [jobTypes, setJobTypes] = useState([]);
+  const [error, setError] = useState('');
+  const [zipOnly, setZipOnly] = useState(false);
+  const [searched, setSearched] = useState(null);
+  const resultsRef = useRef(null);
+  const formRef = useRef(null);
+  const requestRef = useRef(null);
+  useEffect(() => () => requestRef.current?.abort(), []);
+  useEffect(() => {
+    if (!results) return;
+    const frame = requestAnimationFrame(() => {
+      resultsRef.current?.focus({ preventScroll: true });
+      resultsRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [results]);
 
-  const handleSearch = async (e) => {
+  const handleSearch = async e => {
     e.preventDefault();
-    setLoading(true);
-
-    const formData = new FormData(e.target);
-    let data = {};
-
-    if (searchMode === 'company') {
-      data = {
-        search_type: 'company',
-        company_name: formData.get('company_name') || ''
-      };
-    } else {
-      const jobTypes = formData.getAll('job_type');
-      const otherJobType = formData.get('other_job_type');
-      if (otherJobType && otherJobType.trim() !== '') {
-        jobTypes.push(otherJobType.trim());
-      }
-      data = {
-        search_type: 'type-location',
-        job_types: jobTypes,
-        address: formData.get('address'),
-        radius: formData.get('radius')
-      };
+    const data = hotJobFilters(new FormData(e.currentTarget));
+    const zip = enteredZip(data.address);
+    if (zipOnly && !zip) {
+      setError('Enter a five-digit ZIP code in Location to use ZIP-only search.');
+      formRef.current.elements.address.focus();
+      return;
     }
-
+    if (zipOnly) { data.radius = '0'; data.address = zip; }
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setLoading(true);
+    setError('');
+    setSelection(null);
     try {
       const response = await fetch('/api/search-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        signal: controller.signal,
       });
       const resultData = await response.json();
-
-      if (resultData.success) {
-        setResults(resultData.results);
-      } else {
-        alert('Search failed: ' + (resultData.error || 'Unknown error'));
-      }
+      if (!response.ok || !resultData.success) throw new Error(resultData.error || 'Search could not be completed. Please try again.');
+      if (controller.signal.aborted) return;
+      const checked = checkedJobResults(resultData.results);
+      const filtered = zipOnly ? await zipOnlyJobs(checked, zip, controller.signal) : checked;
+      if (controller.signal.aborted) return;
+      setSearched({ ...data, zipOnly, zip });
+      setResults(filtered);
     } catch (err) {
-      console.error(err);
-      alert('Network error - Is your backend server running?');
+      if (err.name !== 'AbortError') setError(err.message || 'Search could not be completed. Please try again.');
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
-
-  return (
-    <div className="app-container" style={{ flexDirection: 'column', maxWidth: '1400px' }}>
-      <div className="glass-panel main-form" style={{ maxWidth: '1300px' }}>
-        <header>
-          <h1>Job Search</h1>
-          <p className="subtitle">
-            {searchMode === 'company' 
-              ? 'Find potential jobs by company name' 
-              : 'Find potential jobs based on radius and job type'}
-          </p>
-        </header>
-
-        <form onSubmit={handleSearch}>
-          {/* Search Mode Toggles */}
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            gap: '2rem', 
-            marginBottom: '2rem', 
-            paddingBottom: '1rem', 
-            borderBottom: '1px solid rgba(0,0,0,0.05)' 
-          }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: '500', color: 'var(--text-dark)' }}>
-              <input 
-                type="radio" 
-                name="search_mode" 
-                value="type-location" 
-                checked={searchMode === 'type-location'} 
-                onChange={() => {
-                  setSearchMode('type-location');
-                  setResults(null);
-                }} 
-              />
-              Search by Job Type & Location
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: '500', color: 'var(--text-dark)' }}>
-              <input 
-                type="radio" 
-                name="search_mode" 
-                value="company" 
-                checked={searchMode === 'company'} 
-                onChange={() => {
-                  setSearchMode('company');
-                  setResults(null);
-                }} 
-              />
-              Search by Company Name
-            </label>
-          </div>
-
-          {searchMode === 'company' ? (
-            <div className="form-grid">
-              <div className="input-group full-width">
-                <label>Company Name</label>
-                <input 
-                  type="text" 
-                  name="company_name" 
-                  placeholder="Enter company name (e.g. Walmart, Disney)..." 
-                  required 
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="form-grid">
-              <div className="input-group">
-                <label>Job Type (Hold Ctrl/Cmd to select multiple)</label>
-                <select name="job_type" multiple size="4">
-                  <option value="HVAC Repair">HVAC Repair</option>
-                  <option value="Accountant">Accountant</option>
-                  <option value="Airport (Baggage/customer service/ground ops)">Airport (Baggage/customer service/ground ops)</option>
-                  <option value="Auto Parts">Auto Parts</option>
-                  <option value="Car Wash Attendant">Car Wash Attendant</option>
-                  <option value="Cashier">Cashier</option>
-                  <option value="Catering">Catering</option>
-                  <option value="CDL Driver">CDL Driver</option>
-                  <option value="Cement Mason/finisher">Cement Mason/finisher</option>
-                  <option value="Computer / IT">Computer / IT</option>
-                  <option value="Computer Programmer">Computer Programmer</option>
-                  <option value="Construction">Construction</option>
-                  <option value="Corrections">Corrections</option>
-                  <option value="Custodian">Custodian</option>
-                  <option value="Customer service">Customer service</option>
-                  <option value="Data Entry">Data Entry</option>
-                  <option value="Day Care / Preschool">Day Care/ Preschool</option>
-                  <option value="Delivery Driver">Delivery Driver</option>
-                  <option value="Drywaller">Drywaller</option>
-                  <option value="Educator">Educator</option>
-                  <option value="Electrician">Electrician</option>
-                  <option value="Engineering">Engineering</option>
-                  <option value="Event Staff">Event Staff</option>
-                  <option value="Fast food">Fast food</option>
-                  <option value="Gas Station Attendant">Gas Station Attendant</option>
-                  <option value="Grocery Store">Grocery Store</option>
-                  <option value="Healthcare">Healthcare</option>
-                  <option value="Hotel/Hospitality">Hotel/Hospitality</option>
-                  <option value="Housekeeper">Housekeeper</option>
-                  <option value="Information Technology (IT)">Information Technology (IT)</option>
-                  <option value="Landscaping">Landscaping</option>
-                  <option value="Manager (Department/Project)">Manager (Department/Project)</option>
-                  <option value="Manager (Store/Crew)">Manager (Store/Crew)</option>
-                  <option value="Mechanic">Mechanic</option>
-                  <option value="Manufacturing">Manufacturing</option>
-                  <option value="Nursing">Nursing</option>
-                  <option value="Painter">Painter</option>
-                  <option value="Pest Control">Pest Control</option>
-                  <option value="Plumbing">Plumbing</option>
-                  <option value="Restaurant (Cook/Waiter/Host)">Restaurant (Cook/Waiter/Host)</option>
-                  <option value="Retail">Retail</option>
-                  <option value="Sales">Sales</option>
-                  <option value="Security">Security</option>
-                  <option value="Stocking">Stocking</option>
-                  <option value="Telephone/Call Center/Scheduling">Telephone/Call Center/Scheduling</option>
-                  <option value="Theme Park">Theme Park</option>
-                  <option value="Trucking/Transportation">Trucking/Transportation</option>
-                  <option value="Warehousing/Logistics">Warehousing/Logistics</option>
-                </select>
-              </div>
-
-              <div className="input-group">
-                <label>Find a job near this location (Street, City, Zipcode)</label>
-                <textarea name="address" rows="4" placeholder="Enter full address..."></textarea>
-              </div>
-
-              <div className="input-group">
-                <label>Other Job Type (Not in list)</label>
-                <input type="text" name="other_job_type" placeholder="Enter other job type..." />
-              </div>
-
-              <div className="input-group">
-                <label>List jobs within radius of (miles)</label>
-                <input type="number" name="radius" defaultValue="20" min="1" />
-              </div>
-            </div>
-          )}
-
-          <div className="actions mt-2 text-center">
-            <button type="submit" className="btn primary-btn" style={{ maxWidth: '300px' }} disabled={loading}>
-              {loading ? 'Searching...' : 'Search'}
-            </button>
-            <button type="button" className="btn secondary-btn" style={{ maxWidth: '300px', marginLeft: '1rem' }} onClick={() => {
-              if (user) {
-                navigate(user.role === 'admin' ? '/employment-dashboard' : '/dashboard');
-              } else {
-                navigate('/');
-              }
-            }}>
-              {user ? 'Back to Dashboard' : 'Back to Job Seeker Dashboard'}
-            </button>
-          </div>
-        </form>
-
-        {results && (
-          <div className="results-section mt-2">
-            <h2>Search Results</h2>
-
-            <h3 style={{ marginTop: '1.5rem', color: '#2ecc71' }}>Currently Hiring Jobs</h3>
-            {results.recent && results.recent.length > 0 ? (
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Company</th>
-                      <th>Role</th>
-                      <th>Location</th>
-                      <th>Distance</th>
-                      <th>Date Verified</th>
-                      <th>Career Website</th>
-                      <th>Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.recent.map((job, idx) => (
-                      <tr key={idx}>
-                        <td>{job.company}</td>
-                        <td>{job.role}</td>
-                        <td>{job.location}</td>
-                        <td>{job.distance || 'N/A'}</td>
-                        <td>{job.date_verified || 'N/A'}</td>
-                        <td>
-                          {job.career_website ? (
-                            <a href={job.career_website} target="_blank" rel="noopener noreferrer">View Posting</a>
-                          ) : 'N/A'}
-                        </td>
-                        <td>{job.notes || 'N/A'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : <p>No currently hiring jobs found.</p>}
-
-            <h3 style={{ marginTop: '2rem', color: '#f39c12' }}>Other Jobs Meeting Criteria (Not Currently Hiring)</h3>
-            {results.older && results.older.length > 0 ? (
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Company</th>
-                      <th>Role</th>
-                      <th>Location</th>
-                      <th>Distance</th>
-                      <th>Date Verified</th>
-                      <th>Career Website</th>
-                      <th>Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.older.map((job, idx) => (
-                      <tr key={idx}>
-                        <td>{job.company}</td>
-                        <td>{job.role}</td>
-                        <td>{job.location}</td>
-                        <td>{job.distance || 'N/A'}</td>
-                        <td>{job.date_verified || 'N/A'}</td>
-                        <td>
-                          {job.career_website ? (
-                            <a href={job.career_website} target="_blank" rel="noopener noreferrer">View Posting</a>
-                          ) : 'N/A'}
-                        </td>
-                        <td>{job.notes || 'N/A'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : <p>No other matching jobs found.</p>}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  const clearFilters = () => {
+    requestRef.current?.abort();
+    formRef.current.reset();
+    formRef.current.querySelector('details').open = false;
+    setZipOnly(false);
+    setJobTypes([]);
+    setResults(null);
+    setSearched(null);
+    setError('');
+    setLoading(false);
+    formRef.current.elements.company_name.focus();
+  };
+  const count = (results?.recent?.length || 0) + (results?.older?.length || 0);
+  return <div className="workspace-page search-page streamlined-job-search">
+    <div className="page-heading"><div><p className="eyebrow">FIND YOUR NEXT OPPORTUNITY</p><h1>Job Search</h1><p>Find the right opportunity. Use any combination of filters.</p></div><Link className="subtle-button" to="/search"><Search size={16} />Universal search</Link></div>
+    <section className="surface combined-job-filter"><form ref={formRef} onSubmit={handleSearch} aria-label="Job search filters">
+      <div className="job-search-primary"><div className="input-group"><label htmlFor="hotjobsearch-company_name">Company</label><div className="search-field-icon"><BriefcaseBusiness size={18} /><input id="hotjobsearch-company_name" name="company_name" placeholder="Any company" /></div></div><div className="input-group"><label htmlFor="hotjobsearch-address">Location</label><div className="search-field-icon"><MapPin size={18} /><input id="hotjobsearch-address" name="address" placeholder="City or address with ZIP code" aria-describedby="job-location-hint" /></div></div><div className="input-group"><label htmlFor="hotjobsearch-radius">Radius (miles)</label><input id="hotjobsearch-radius" type="number" name="radius" defaultValue="20" min="1" disabled={zipOnly} required={!zipOnly} /></div></div>
+      <div className="zip-filter-row"><ZipOnlyToggle id="job-zip-only" checked={zipOnly} onChange={setZipOnly} /><span className="muted">Match the entered ZIP exactly instead of using a radius.</span></div>
+      <div className="job-search-secondary"><JobTypePicker selected={jobTypes} onChange={setJobTypes} /><div className="input-group"><label htmlFor="hotjobsearch-other_job_type">Additional job type</label><input id="hotjobsearch-other_job_type" name="other_job_type" placeholder="Any role or job type" /></div></div>
+      <div className="job-search-submit"><p id="job-location-hint" className="muted">Include a five-digit ZIP code to search by distance.</p><div><button type="button" className="subtle-button" onClick={clearFilters}><RotateCcw size={15} />Clear filters</button><button type="submit" className="solid-button" disabled={loading}><Search size={17} />{loading ? 'Searching…' : 'Search jobs'}</button></div></div>
+    </form></section>
+    {error && <p className="inline-error" role="alert">{error}</p>}
+    {loading && <p className="search-loading" role="status">Searching opportunities…</p>}
+    {!loading && results && <section ref={resultsRef} tabIndex={-1} className="job-search-results" aria-labelledby="job-results-heading"><div className="section-heading"><div><h2 id="job-results-heading">Search results <span className="result-count">{count}</span></h2><p>{searched?.zipOnly ? 'Showing jobs in ZIP ' + searched.zip + ' only.' : searched?.search_type === 'company' ? 'Company matches across all verification dates.' : 'Matching opportunities verified within the past two years, or with no readable verification date.'}</p></div><button type="button" className="text-link" onClick={() => { formRef.current.scrollIntoView({ behavior: 'auto', block: 'center' }); formRef.current.elements.company_name.focus({ preventScroll: true }); }}>Adjust filters</button></div><>{count ? <JobGroups results={results} onSelect={setSelection} /> : <div className="empty-state search-start"><Search size={28} /><h3>No opportunities match these filters</h3><p>Try a broader company name, another job type, or a larger radius.</p></div>}</></section>}
+    {!loading && !results && <div className="empty-state search-start"><Search size={28} /><h2>Your next opportunity is out there</h2><p>Start with a company, a job type, or a nearby ZIP code. Leave filters blank to browse.</p></div>}
+    {selection && <InformationPane canEdit={!!user} selection={selection} onClose={() => setSelection(null)} />}
+  </div>;
 }
-
-export default HotJobSearch;

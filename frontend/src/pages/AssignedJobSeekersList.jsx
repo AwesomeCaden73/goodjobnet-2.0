@@ -45,7 +45,7 @@ function AssignedJobSeekersList({ user }) {
         {loading ? (
           <p className="text-center">Loading assigned seekers...</p>
         ) : error ? (
-          <div style={{ padding: '1rem', background: 'rgba(231, 76, 60, 0.2)', color: '#c0392b', borderRadius: '8px', marginBottom: '1.5rem' }}>
+          <div style={{ padding: '1rem', background: 'rgba(231, 76, 60, 0.2)', color: 'var(--error)', borderRadius: '8px', marginBottom: '1.5rem' }}>
             {error}
           </div>
         ) : seekers.length === 0 ? (
