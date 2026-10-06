@@ -16,6 +16,9 @@ function AdminPage({ user }) {
   const [importStatus, setImportStatus] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState(null);
+  const [syncingCsv, setSyncingCsv] = useState(false);
+  const [syncCsvStatus, setSyncCsvStatus] = useState(null);
+
 
   useEffect(() => {
     fetch('/api/dashboard-stats')
@@ -38,6 +41,7 @@ function AdminPage({ user }) {
     setUpdateStatus(null);
     setImportStatus(null);
     setExportStatus(null);
+    setSyncCsvStatus(null);
     fetch('/api/update-jobseeker-info', {
       method: 'POST',
       headers: {
@@ -68,6 +72,7 @@ function AdminPage({ user }) {
     setImportStatus(null);
     setUpdateStatus(null);
     setExportStatus(null);
+    setSyncCsvStatus(null);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -99,6 +104,7 @@ function AdminPage({ user }) {
     setExportStatus(null);
     setUpdateStatus(null);
     setImportStatus(null);
+    setSyncCsvStatus(null);
     fetch('/api/export-jsearch-jobs', {
       method: 'POST',
       headers: {
@@ -109,15 +115,57 @@ function AdminPage({ user }) {
       .then(data => {
         setExporting(false);
         if (data.success) {
-          setExportStatus({ success: true, message: data.message, url: data.url, count: data.count });
+          setExportStatus({
+            success: true,
+            message: data.message,
+            warning: data.warning,
+            jsearch_limit_exceeded: data.jsearch_limit_exceeded,
+            url: data.url,
+            count: data.count
+          });
         } else {
-          setExportStatus({ success: false, message: (data.error || 'Failed to export JSearch jobs.') + (data.details ? ` (${data.details})` : '') });
+          setExportStatus({
+            success: false,
+            message: (data.error || 'Failed to export JSearch jobs.') + (data.details ? ` (${data.details})` : ''),
+            warning: data.warning,
+            jsearch_limit_exceeded: data.jsearch_limit_exceeded,
+            url: data.url
+          });
         }
       })
       .catch(err => {
         setExporting(false);
         setExportStatus({ success: false, message: 'Network error occurred exporting jobs.' });
         console.error('Error exporting JSearch jobs:', err);
+      });
+  };
+
+  const handleSyncJobSeekersCsv = () => {
+    setSyncingCsv(true);
+    setSyncCsvStatus(null);
+    setUpdateStatus(null);
+    setImportStatus(null);
+    setExportStatus(null);
+
+    fetch('/api/sync-jobseekers-csv-to-drive', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+      .then(res => res.json())
+      .then(data => {
+        setSyncingCsv(false);
+        if (data.success) {
+          setSyncCsvStatus({ success: true, message: data.message, url: data.url });
+        } else {
+          setSyncCsvStatus({ success: false, message: data.error || 'Failed to sync JobSeeker CSV.' });
+        }
+      })
+      .catch(err => {
+        setSyncingCsv(false);
+        setSyncCsvStatus({ success: false, message: 'Network error occurred while syncing JobSeeker CSV.' });
+        console.error('Error syncing JobSeeker CSV:', err);
       });
   };
 
@@ -223,19 +271,36 @@ function AdminPage({ user }) {
             <FaCloudDownloadAlt className={exporting ? 'spin' : ''} />
             <h3>{exporting ? 'Exporting Jobs (JSearch & Companies)...' : 'Export Jobs (JSearch & Featured Companies)'}</h3>
           </button>
+
+          {/* Card 6: Sync JobSeeker CSV to Google Drive */}
+          <button
+            type="button"
+            onClick={handleSyncJobSeekersCsv}
+            disabled={syncingCsv}
+            className="nav-card"
+            style={{ opacity: syncingCsv ? 0.7 : 1 }}
+          >
+            <FaSync className={syncingCsv ? 'spin' : ''} />
+            <h3>{syncingCsv ? 'Syncing JobSeeker CSV to Drive...' : 'Sync JobSeeker CSV to Google Drive'}</h3>
+          </button>
         </div>
 
         {/* Operation Status Feedback */}
-        {(updateStatus || importStatus || exportStatus) && (
+        {(updateStatus || importStatus || exportStatus || syncCsvStatus) && (
           <div style={{ marginTop: '1rem', marginBottom: '1.5rem', textAlign: 'center' }}>
             <p style={{
               fontSize: '1rem',
               fontWeight: 500,
-              color: (updateStatus?.success || importStatus?.success || exportStatus?.success) ? 'var(--success)' : 'var(--error)',
+              color: (updateStatus?.success || importStatus?.success || syncCsvStatus?.success || (exportStatus?.success && !exportStatus?.jsearch_limit_exceeded)) ? 'var(--success)' : 'var(--error)',
               margin: 0
             }}>
-              {updateStatus ? updateStatus.message : importStatus ? importStatus.message : exportStatus.message}
+              {updateStatus ? updateStatus.message : importStatus ? importStatus.message : exportStatus ? exportStatus.message : syncCsvStatus.message}
             </p>
+            {exportStatus?.warning && (
+              <p style={{ fontSize: '0.9rem', color: '#e67e22', fontWeight: 600, marginTop: '0.5rem' }}>
+                ⚠️ {exportStatus.warning}
+              </p>
+            )}
             {importStatus?.success && importStatus?.url && (
               <div style={{ marginTop: '0.75rem' }}>
                 <a
@@ -259,7 +324,7 @@ function AdminPage({ user }) {
                 </a>
               </div>
             )}
-            {exportStatus?.success && exportStatus?.url && (
+            {exportStatus?.url && (
               <div style={{ marginTop: '0.75rem' }}>
                 <a
                   href={exportStatus.url}
@@ -279,6 +344,29 @@ function AdminPage({ user }) {
                   }}
                 >
                   Open Job Postings Sheet <FaExternalLinkAlt style={{ fontSize: '0.75rem' }} />
+                </a>
+              </div>
+            )}
+            {syncCsvStatus?.url && (
+              <div style={{ marginTop: '0.75rem' }}>
+                <a
+                  href={syncCsvStatus.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn secondary-btn"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    width: 'auto',
+                    padding: '0.5rem 1.25rem',
+                    fontSize: '0.85rem',
+                    background: 'rgba(255,255,255,0.8)',
+                    borderColor: 'var(--primary-color)',
+                    color: 'var(--primary-color)'
+                  }}
+                >
+                  Open JobSeeker List Google Drive Sheet <FaExternalLinkAlt style={{ fontSize: '0.75rem' }} />
                 </a>
               </div>
             )}
