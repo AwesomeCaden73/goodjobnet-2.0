@@ -274,9 +274,7 @@ function JobSeekerSearch({ user }) {
                         {list.map((seeker, idx) => (
                           <tr key={idx}>
                             <td style={{ fontWeight: 'bold' }}>
-                              <Link to="/job-seeker-entry" state={{ seeker, fromSearch: true }} style={{ color: 'var(--primary-color)', textDecoration: 'none' }} className="seeker-name-link">
-                                {seeker.name}
-                              </Link>
+                              {seeker.name}
                             </td>
                             <td>{seeker.address || 'N/A'}</td>
                             <td>{seeker.phone ? <a href={`tel:${seeker.phone}`}>{seeker.phone}</a> : 'N/A'}</td>
@@ -322,9 +320,7 @@ function JobSeekerSearch({ user }) {
                         {list.map((seeker, idx) => (
                           <tr key={idx}>
                             <td style={{ fontWeight: 'bold' }}>
-                              <Link to="/job-seeker-entry" state={{ seeker, fromSearch: true }} style={{ color: 'var(--primary-color)', textDecoration: 'none' }} className="seeker-name-link">
-                                {seeker.name}
-                              </Link>
+                              {seeker.name}
                             </td>
                             <td>{seeker.address || 'N/A'}</td>
                             <td>{seeker.phone ? <a href={`tel:${seeker.phone}`}>{seeker.phone}</a> : 'N/A'}</td>

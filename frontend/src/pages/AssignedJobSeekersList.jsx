@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 function AssignedJobSeekersList({ user }) {
   const [loading, setLoading] = useState(true);
@@ -69,14 +69,7 @@ function AssignedJobSeekersList({ user }) {
                 {seekers.map((seeker, idx) => (
                   <tr key={idx}>
                     <td style={{ fontWeight: 'bold' }}>
-                      <Link 
-                        to="/job-seeker-entry" 
-                        state={{ seeker, fromAssigned: true }} 
-                        style={{ color: 'var(--primary-color)', textDecoration: 'none' }} 
-                        className="seeker-name-link"
-                      >
-                        {seeker.name}
-                      </Link>
+                      {seeker.name}
                     </td>
                     <td>{seeker.address || 'N/A'}</td>
                     <td>{seeker.phone ? <a href={`tel:${seeker.phone}`}>{seeker.phone}</a> : 'N/A'}</td>

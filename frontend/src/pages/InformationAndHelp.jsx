@@ -18,7 +18,6 @@ function InformationAndHelp() {
           <ul>
             <li>Job Location Map: This is a map showing the locations of the jobs that are posted in the Screened Job Opportunities list.</li>
             <li>Search for nearby jobs: This is a search engine for jobs that are within a certain radius of an address that is provided by the user.</li>
-            <li>Job Seeker Entry: This is a form for entering general information for individuals that are seeking employment. This information is then reviewed by the Orlando Employment Center so they can provide assistance.</li>
             <li>Job Opportunity Entry: This is a form for entering employment opportunities that can be be made available through the Orlando Employment Center for others who are seeking employment.</li>
           </ul>
         </div>

@@ -3,7 +3,6 @@ import { useState } from 'react';
 import Login from './pages/Login';
 import GeneralDashboard from './pages/GeneralDashboard';
 import JobEntry from './pages/JobEntry';
-import JobSeekerEntry from './pages/JobSeekerEntry';
 import HotJobSearch from './pages/HotJobSearch';
 import JobSeekerSearch from './pages/JobSeekerSearch';
 import EmploymentCenterDashboard from './pages/EmploymentCenterDashboard';
@@ -82,7 +81,6 @@ function App() {
             <Route path="/employment-dashboard" element={<EmploymentCenterDashboard user={user} />} />
             <Route path="/help" element={<InformationAndHelp />} />
             <Route path="/job-entry" element={<JobEntry user={user} />} />
-            <Route path="/job-seeker-entry" element={<JobSeekerEntry user={user} />} />
             <Route path="/hot-jobs-review" element={<HotJobsReview user={user} />} />
             <Route path="/hot-jobs-5review" element={<HotJobsReview user={user} />} />
             <Route path="/hot-jobs-46review" element={<HotJobsReview user={user} />} />
