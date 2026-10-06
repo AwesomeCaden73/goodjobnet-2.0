@@ -1,7 +1,9 @@
+import EntryJobTypes from '../components/EntryJobTypes';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 function JobEntry({ user }) {
+  const [formKey, setFormKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [success, setSuccess] = useState(false);
@@ -54,6 +56,7 @@ function JobEntry({ user }) {
         setSuccess(true);
         setMessage('Job successfully added to database!');
         e.target.reset();
+        setFormKey(key => key + 1);
       } else {
         setSuccess(false);
         setMessage(result.error || 'Failed to submit Job.');
@@ -66,15 +69,15 @@ function JobEntry({ user }) {
   };
 
   return (
-    <div className="app-container">
-      <div className="glass-panel main-form">
-        <header>
-          <h1>Job Entry Form</h1>
+    <div className="app-container entry-page">
+      <div className="glass-panel main-form streamlined-entry">
+        <header className="entry-heading"><p className="eyebrow">CREATE A CONNECTION</p>
+          <h1>Job opportunity</h1>
           <p className="subtitle">Submit new potential jobs to the Orlando Employment Center</p>
         </header>
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-grid">
+        <form key={formKey} onSubmit={handleSubmit}>
+          <fieldset className="entry-section"><legend>Company & location</legend><p>Where is this opportunity based?</p><div className="form-grid">
 
             <div className="input-group">
               <label htmlFor="jobentry-company_name">Company Name <span className="required">*</span></label>
@@ -135,6 +138,7 @@ function JobEntry({ user }) {
 
 
 
+          </div></fieldset><fieldset className="entry-section"><legend>Hiring contact & opportunities</legend><p>Contact details and available roles.</p><div className="form-grid">
             <div className="input-group">
               <label htmlFor="jobentry-career_website">Career Website URL</label>
               <input id="jobentry-career_website" type="text" name="career_website" />
@@ -166,57 +170,7 @@ function JobEntry({ user }) {
             </div>
 
             <div className="input-group full-width">
-              <label htmlFor="jobentry-available_jobs_select">Available Jobs (Select multiple with Ctrl/Cmd, and/or enter manually)</label>
-              <select id="jobentry-available_jobs_select" name="available_jobs_select" multiple size="6">
-                <option value="HVAC Repair">HVAC Repair</option>
-                <option value="Accountant">Accountant</option>
-                <option value="Airport (Baggage/customer service/ground ops)">Airport (Baggage/customer service/ground ops)</option>
-                <option value="Auto Parts">Auto Parts</option>
-                <option value="Car Wash Attendant">Car Wash Attendant</option>
-                <option value="Cashier">Cashier</option>
-                <option value="Catering">Catering</option>
-                <option value="CDL Driver">CDL Driver</option>
-                <option value="Cement Mason/finisher">Cement Mason/finisher</option>
-                <option value="Computer / IT">Computer / IT</option>
-                <option value="Computer Programmer">Computer Programmer</option>
-                <option value="Construction">Construction</option>
-                <option value="Corrections">Corrections</option>
-                <option value="Custodian">Custodian</option>
-                <option value="Customer service">Customer service</option>
-                <option value="Data Entry">Data Entry</option>
-                <option value="Day Care / Preschool">Day Care/ Preschool</option>
-                <option value="Delivery Driver">Delivery Driver</option>
-                <option value="Drywaller">Drywaller</option>
-                <option value="Educator">Educator</option>
-                <option value="Electrician">Electrician</option>
-                <option value="Engineering">Engineering</option>
-                <option value="Event Staff">Event Staff</option>
-                <option value="Fast food">Fast food</option>
-                <option value="Gas Station Attendant">Gas Station Attendant</option>
-                <option value="Grocery Store">Grocery Store</option>
-                <option value="Healthcare">Healthcare</option>
-                <option value="Hotel/Hospitality">Hotel/Hospitality</option>
-                <option value="Housekeeper">Housekeeper</option>
-                <option value="Information Technology (IT)">Information Technology (IT)</option>
-                <option value="Landscaping">Landscaping</option>
-                <option value="Manager (Department/Project)">Manager (Department/Project)</option>
-                <option value="Manager (Store/Crew)">Manager (Store/Crew)</option>
-                <option value="Mechanic">Mechanic</option>
-                <option value="Manufacturing">Manufacturing</option>
-                <option value="Nursing">Nursing</option>
-                <option value="Painter">Painter</option>
-                <option value="Pest Control">Pest Control</option>
-                <option value="Plumbing">Plumbing</option>
-                <option value="Restaurant (Cook/Waiter/Host)">Restaurant (Cook/Waiter/Host)</option>
-                <option value="Retail">Retail</option>
-                <option value="Sales">Sales</option>
-                <option value="Security">Security</option>
-                <option value="Stocking">Stocking</option>
-                <option value="Telephone/Call Center/Scheduling">Telephone/Call Center/Scheduling</option>
-                <option value="Theme Park">Theme Park</option>
-                <option value="Trucking/Transportation">Trucking/Transportation</option>
-                <option value="Warehousing/Logistics">Warehousing/Logistics</option>
-              </select>
+              <EntryJobTypes name="available_jobs_select" label="Available job types" />
               <input type="text" name="available_jobs_manual" placeholder="Other available jobs (comma separated)" style={{ marginTop: '0.5rem' }} />
             </div>
 
@@ -225,7 +179,7 @@ function JobEntry({ user }) {
               <textarea id="jobentry-notes" name="notes" rows="2"></textarea>
             </div>
 
-          </div>
+          </div></fieldset>
 
           {message && (
             <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? 'var(--success)' : 'var(--error)' }}>
@@ -233,8 +187,8 @@ function JobEntry({ user }) {
             </div>
           )}
 
-          <div className="actions mt-2 mb-1" style={{ display: 'flex', gap: '1rem' }}>
-            <button type="button" className="btn secondary-btn" onClick={() => navigate(user?.role === 'admin' ? '/employment-dashboard' : '/dashboard')}>Cancel</button>
+          <div className="actions entry-actions">
+            <button type="button" className="btn secondary-btn" onClick={() => navigate('/create')}>Cancel</button>
             <button type="submit" className="btn primary-btn" disabled={loading}>
               {loading ? 'Submitting...' : 'Submit Job'}
             </button>

@@ -1,3 +1,6 @@
+import JobTypePicker from '../components/JobTypePicker';
+import EntryJobTypes from '../components/EntryJobTypes';
+import { Phone, Clock3, ClipboardCheck, Search, ArrowRight } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { FaMicrophone, FaVolumeUp, FaPhone, FaArrowLeft, FaArrowRight, FaSave, FaExclamationTriangle } from 'react-icons/fa';
@@ -531,6 +534,8 @@ function HotJobsReview({ user }) {
       .then(data => {
         if (data.success) {
           setJobs(data.jobs);
+          const selectedIndex = data.jobs.findIndex(job => job.row_index === location.state?.editJob?.row_index);
+          if (selectedIndex >= 0) setCurrentIndex(selectedIndex);
         } else {
           setMessage(data.error || 'Failed to fetch jobs.');
         }
@@ -608,7 +613,9 @@ function HotJobsReview({ user }) {
       }
     }
     window.speechSynthesis.cancel();
-    if (location.state?.fromEntry) {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo);
+    } else if (location.state?.fromEntry) {
       navigate('/job-seeker-entry', {
         state: {
           seeker: location.state.seeker,
@@ -1341,97 +1348,16 @@ function HotJobsReview({ user }) {
   };
 
   if (!categorySelected) {
-    return (
-      <div className="app-container">
-        <div className="glass-panel main-form">
-          <header>
-            <h1>Review Hot Jobs</h1>
-            <p className="subtitle">Select the type of jobs you want to update</p>
-          </header>
-
-          <div className="form-grid mt-2">
-            <button className="btn primary-btn" onClick={() => fetchJobs('unverified_no_career')} style={{ height: 'auto', padding: '1.5rem', background: '#2980b9' }}>
-              Phone Verification Queue
-            </button>
-            <button className="btn primary-btn" onClick={() => fetchJobs('5days')} style={{ height: 'auto', padding: '1.5rem' }}>
-              Jobs Expiring in the next 5 days
-            </button>
-            <button className="btn primary-btn" onClick={() => fetchJobs('46weeks')} style={{ height: 'auto', padding: '1.5rem' }}>
-              Jobs that have expired in the last 4-6 weeks
-            </button>
-
-            <div className="input-group full-width mt-2" style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '1.5rem' }}>
-              <label style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>Or search by specific Job Type (Hold Ctrl/Cmd to select multiple from list, and/or enter custom text)</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                <select
-                  multiple
-                  size="5"
-                  value={selectedJobTypes}
-                  onChange={e => setSelectedJobTypes(Array.from(e.target.selectedOptions, option => option.value))}
-                  style={{ width: '100%', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0.5rem' }}
-                >
-                  {JOB_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <input
-                    type="text"
-                    placeholder="Or enter custom job type(s) / free text..."
-                    value={jobTypeQuery}
-                    onChange={e => setJobTypeQuery(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                  <button
-                    className="btn secondary-btn"
-                    onClick={() => {
-                      const combined = [...selectedJobTypes];
-                      if (jobTypeQuery.trim()) {
-                        combined.push(jobTypeQuery.trim());
-                      }
-                      fetchJobs('type', combined.join(', '));
-                    }}
-                    style={{ width: 'auto' }}
-                    disabled={selectedJobTypes.length === 0 && !jobTypeQuery.trim()}
-                  >
-                    Search
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="input-group full-width mt-2" style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '1.5rem' }}>
-              <label style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>Or search by Company Name</label>
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <input
-                  type="text"
-                  placeholder="Enter company name..."
-                  value={companySearchQuery}
-                  onChange={e => setCompanySearchQuery(e.target.value)}
-                  style={{ flex: 1 }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && companySearchQuery.trim()) {
-                      fetchJobs('company', '', companySearchQuery.trim());
-                    }
-                  }}
-                />
-                <button
-                  className="btn secondary-btn"
-                  onClick={() => fetchJobs('company', '', companySearchQuery.trim())}
-                  style={{ width: 'auto' }}
-                  disabled={!companySearchQuery.trim()}
-                >
-                  Search
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="actions mt-2" style={{ textAlign: 'center' }}>
-            <button type="button" className="btn secondary-btn" onClick={() => navigate(user?.role === 'admin' ? '/employment-dashboard' : '/dashboard')} style={{ width: 'auto' }}>Back to Dashboard</button>
-          </div>
-        </div>
-      </div>
-    );
+    return <div className="workspace-page review-landing"><div className="page-heading"><div><p className="eyebrow">KEEP OPPORTUNITIES CURRENT</p><h1>Review jobs</h1><p>Choose a verification queue or find an employer to update.</p></div></div>
+      <div className="review-queues">{[
+        ['unverified_no_career', 'Phone Verification Queue', 'Older unverified opportunities without a career website.', Phone],
+        ['5days', 'Expiring soon', 'Jobs expiring in the next five days.', Clock3],
+        ['46weeks', 'Recently expired', 'Jobs expired in the last four to six weeks.', ClipboardCheck]
+      ].map(([category, title, description, Icon]) => <button type="button" key={category} className="surface review-queue-card" onClick={() => fetchJobs(category)}><span className="app-icon orange"><Icon size={24} /></span><h2>{title}</h2><p>{description}</p><span className="text-link">Open queue <ArrowRight size={16} /></span></button>)}</div>
+      <section className="surface combined-job-filter"><h2>Find jobs to review</h2><div className="review-search-grid">
+        <form onSubmit={e => { e.preventDefault(); fetchJobs('company', '', companySearchQuery.trim()); }}><div className="input-group"><label htmlFor="review-company">Company name</label><input id="review-company" placeholder="Enter a company name" value={companySearchQuery} onChange={e => setCompanySearchQuery(e.target.value)} /></div><button className="solid-button" disabled={!companySearchQuery.trim()}><Search size={16} />Find company</button></form>
+        <form onSubmit={e => { e.preventDefault(); fetchJobs('type', [...selectedJobTypes, ...(jobTypeQuery.trim() ? [jobTypeQuery.trim()] : [])].join(', ')); }}><JobTypePicker selected={selectedJobTypes} onChange={setSelectedJobTypes} /><div className="input-group"><label htmlFor="review-type">Additional job type</label><input id="review-type" placeholder="Any role or job type" value={jobTypeQuery} onChange={e => setJobTypeQuery(e.target.value)} /></div><button className="solid-button" disabled={!selectedJobTypes.length && !jobTypeQuery.trim()}><Search size={16} />Find job types</button></form>
+      </div></section></div>;
   }
 
   if (loading) {
@@ -1445,6 +1371,7 @@ function HotJobsReview({ user }) {
           <header>
             <h1>{reviewTitle}</h1>
             <p className="subtitle">No jobs found matching this criteria.</p>
+            {message && <p className="inline-error" role="alert">{message}</p>}
           </header>
           <div className="actions mt-2">
             <button type="button" className="btn secondary-btn" onClick={handleGoBack}>Go Back</button>
@@ -1456,8 +1383,8 @@ function HotJobsReview({ user }) {
   }
 
   return (
-    <div className="app-container fade-in">
-      <div className="glass-panel main-form">
+    <div className="app-container fade-in review-workspace">
+      <div className="glass-panel main-form streamlined-entry">
         <header className="review-heading">
           <div>
             <h1>{reviewTitle}</h1>
@@ -1485,7 +1412,7 @@ function HotJobsReview({ user }) {
         </header>
 
         {/* VOICE ASSISTANT CONTROL HUD PANEL */}
-        <div className="voice-assistant-panel">
+        <details className="review-voice-tools" open={voiceActive || undefined}><summary>Voice assistant & call settings</summary><div className="voice-assistant-panel">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
               <button
@@ -1582,7 +1509,9 @@ function HotJobsReview({ user }) {
           )}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+        </details>
+        <section className="review-contact-strip"><div><p className="eyebrow">CURRENT OPPORTUNITY</p><h2>{currentJob.company_name}</h2><p>{[currentJob.company_street, currentJob.company_city, currentJob.company_state, currentJob.company_zip].filter(Boolean).join(', ')}</p></div><div>{currentJob.contact_name && <span>{currentJob.contact_name}</span>}{currentJob.contact_phone && <button type="button" className="solid-button" onClick={handleCallCompany}><Phone size={16} />Call company</button>}</div></section>
+        <div className="review-pagination">
           <button type="button" className="btn secondary-btn" onClick={handlePrev} disabled={currentIndex === 0} style={{ width: 'auto' }}>
             &larr; Previous Job
           </button>
@@ -1597,8 +1526,8 @@ function HotJobsReview({ user }) {
             const matchedJobs = existingJobs.filter(j => JOB_OPTIONS.includes(j));
             const unmatchedJobs = existingJobs.filter(j => !JOB_OPTIONS.includes(j));
 
-            return (
-              <div className="form-grid">
+            return (<>
+              <fieldset className="entry-section"><legend>Company & location</legend><div className="form-grid">
                 <div className="input-group">
                   <label>Company Name <span className="required">*</span></label>
                   <input type="text" name="company_name" defaultValue={currentJob.company_name} required />
@@ -1655,6 +1584,7 @@ function HotJobsReview({ user }) {
                   <input id="hotjobsreview-company_zip" type="text" name="company_zip" defaultValue={currentJob.company_zip} />
                 </div>
 
+              </div></fieldset><fieldset className="entry-section"><legend>Hiring contact</legend><div className="form-grid">
                 <div className="input-group full-width">
                   <label>Career Website URL</label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -1682,6 +1612,7 @@ function HotJobsReview({ user }) {
                   <input id="hotjobsreview-contact_email" type="email" name="contact_email" defaultValue={currentJob.contact_email} />
                 </div>
 
+              </div></fieldset><fieldset className="entry-section"><legend>Opportunities & notes</legend><div className="form-grid">
                 <div className="input-group">
                   <label htmlFor="hotjobsreview-currently_hiring">Currently Hiring</label>
                   <select id="hotjobsreview-currently_hiring"
@@ -1701,10 +1632,7 @@ function HotJobsReview({ user }) {
                 </div>
 
                 <div className="input-group full-width">
-                  <label htmlFor="hotjobsreview-available_jobs_select">Available Jobs (Select multiple with Ctrl/Cmd, and/or enter manually)</label>
-                  <select id="hotjobsreview-available_jobs_select" name="available_jobs_select" multiple size="6" defaultValue={matchedJobs}>
-                    {JOB_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
+                  <EntryJobTypes name="available_jobs_select" initial={matchedJobs} label="Available job types" />
                   <input type="text" name="available_jobs_manual" defaultValue={unmatchedJobs.join(', ')} placeholder="Other available jobs (comma separated)" style={{ marginTop: '0.5rem' }} />
                 </div>
 
@@ -1712,8 +1640,8 @@ function HotJobsReview({ user }) {
                   <label htmlFor="hotjobsreview-notes">Additional Notes</label>
                   <textarea id="hotjobsreview-notes" name="notes" rows="2" defaultValue={currentJob.notes}></textarea>
                 </div>
-              </div>
-            );
+              </div></fieldset>
+</>            );
           })()}
 
           {message && (

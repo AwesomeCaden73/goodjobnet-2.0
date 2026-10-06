@@ -1,3 +1,4 @@
+import { BrandMark } from '../components/BrandArtwork';
 ﻿import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, EyeOff, KeyRound, ArrowRight } from 'lucide-react';
@@ -37,7 +38,7 @@ export default function Login({ onLogin }) {
     finally { setBusy(false); }
   };
   const switchMode = () => { setRegister(!register); setStep('username'); setError(''); setVisible(false); };
-  return <div className="login-page"><div className="login-ambient" aria-hidden="true" /><div className={'login-stack ' + (register ? 'registration-stack' : '')}><section className="login-card"><Link to="/" className="login-brand"><span className="brand-mark"><span /><span /><span /></span>GoodJobNet</Link>
+  return <div className="login-page"><div className="login-ambient" aria-hidden="true" /><div className={'login-stack ' + (register ? 'registration-stack' : '')}><section className="login-card"><Link to="/" className="login-brand"><BrandMark />GoodJobNet</Link>
     {!register && step === 'password' && <button className="login-identity" type="button" onClick={() => { setStep('username'); setError(''); }}><ArrowLeft size={16} />{username}</button>}
     <h1>{register ? 'Create your account' : step === 'username' ? 'Sign in' : 'Enter password'}</h1><p>{register ? 'Apply for access to the employment workspace.' : step === 'username' ? 'to continue to GoodJobNet' : 'Use your GoodJobNet account password.'}</p>
     {error && <p className="login-error" role="alert">{error}</p>}{notice && <p className="login-notice" role="status">{notice}</p>}

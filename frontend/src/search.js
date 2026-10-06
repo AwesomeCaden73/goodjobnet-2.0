@@ -1,10 +1,11 @@
+import { checkedJobResults } from './jobSearchResults.js';
 // Compose the existing read-only search operations without changing their contracts.
 export async function searchWorkspace(query, user, signal, request = fetch) {
   const post = async (endpoint, payload) => {
     const response = await request(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal });
     const data = await response.json();
     if (!response.ok || !data.success) throw new Error(data.error || 'Search is temporarily unavailable.');
-    return data.results;
+    return endpoint === '/api/search-jobs' ? checkedJobResults(data.results) : data.results;
   };
   const operations = [post('/api/search-jobs', { search_type: 'type-location', job_types: [], address: '', radius: '20' })];
   if (user) {

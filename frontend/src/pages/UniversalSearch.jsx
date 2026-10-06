@@ -37,7 +37,7 @@ function SearchResults({ query, user }) {
     {!loading && tab === 'Apps' && apps.length === 0 && <p className="empty-state">No apps match this search. Try “jobs”, “people”, or “help”.</p>}
     {!loading && (((tab === 'All' || tab === 'Jobs') && data.jobs.length > limit) || ((tab === 'All' || tab === 'People') && data.people.length > limit)) && <button className="subtle-button" onClick={() => setLimit(limit + 30)}>Show more results</button>}
     {!user && <div className="search-signin"><Users size={20} /><p>Supporting job seekers? <Link to="/login">Sign in</Link> to search people and access your workspace.</p></div>}
-    {selection && <InformationPane selection={selection} onClose={() => setSelection(null)} returnTo={'/search?q=' + encodeURIComponent(query)} />}
+    {selection && <InformationPane canEdit={!!user} selection={selection} onClose={() => setSelection(null)} returnTo={'/search?q=' + encodeURIComponent(query)} />}
   </div>;
 }
 
