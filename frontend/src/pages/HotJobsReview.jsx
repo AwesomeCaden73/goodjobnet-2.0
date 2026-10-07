@@ -1,6 +1,7 @@
+import { remainingReviewJobs } from '../hotJobReview';
 import JobTypePicker from '../components/JobTypePicker';
 import EntryJobTypes from '../components/EntryJobTypes';
-import { Phone, Clock3, ClipboardCheck, Search, ArrowRight } from 'lucide-react';
+import { Phone, Clock3, ClipboardCheck, Search, ArrowRight, Trash2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { FaMicrophone, FaVolumeUp, FaPhone, FaArrowLeft, FaArrowRight, FaSave, FaExclamationTriangle } from 'react-icons/fa';
@@ -25,6 +26,8 @@ function HotJobsReview({ user }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const mutationRef = useRef(false);
   const [message, setMessage] = useState('');
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
@@ -1036,8 +1039,10 @@ function HotJobsReview({ user }) {
               speak("Saving job details.");
               formRef.current.requestSubmit();
             }
+          } else if (transcriptLower.includes("delete job") || transcriptLower.includes("delete this job") || transcriptLower === "delete") {
+            handleDeleteJob();
           } else if (transcriptLower.includes("help")) {
-            speak("Voice commands are: next job, previous job, read details, update company type, update job types, update currently hiring status, update notes, call company, pause, save, or help.");
+            speak("Voice commands are: next job, previous job, read details, update company type, update job types, update currently hiring status, update notes, call company, pause, save, delete job, or help.");
           }
         };
 
@@ -1267,6 +1272,8 @@ function HotJobsReview({ user }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (mutationRef.current) return;
+    mutationRef.current = true;
     setSaving(true);
     setMessage('');
 
@@ -1344,8 +1351,71 @@ function HotJobsReview({ user }) {
       }
       setMessage('Error connecting to server.');
     }
+    mutationRef.current = false;
     setSaving(false);
   };
+
+  async function handleDeleteJob() {
+    const job = jobsRef.current[currentIndexRef.current];
+    if (!job || !job.row_index || mutationRef.current) return;
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete "${job.company_name || 'this job'}" from the spreadsheet? This action cannot be undone.`
+    );
+    if (!confirmDelete) return;
+
+    mutationRef.current = true;
+    setDeleting(true);
+    setMessage('');
+    setSuccess(false);
+
+    try {
+      const response = await fetch('/api/delete-hot-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ row_index: job.row_index })
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setSuccess(true);
+        playChirp('success');
+        setMessage(result.message || 'Job successfully deleted!');
+
+        if (voiceActiveRef.current) {
+          speak('Job successfully deleted from spreadsheet.');
+        }
+
+        const updatedJobs = remainingReviewJobs(jobsRef.current, job.row_index);
+        jobsRef.current = updatedJobs;
+        // The next spreadsheet row can inherit the deleted row number. Remount its inputs.
+        setUpdateKey(previous => previous + 1);
+        if (updatedJobs.length === 0) {
+          setJobs([]);
+        } else {
+          setJobs(updatedJobs);
+          if (currentIndexRef.current >= updatedJobs.length) {
+            setCurrentIndex(updatedJobs.length - 1);
+          }
+        }
+      } else {
+        setSuccess(false);
+        playChirp('error');
+        if (voiceActiveRef.current) {
+          speak('Failed to delete job: ' + (result.error || 'Unknown error'));
+        }
+        setMessage(result.error || 'Failed to delete job.');
+      }
+    } catch {
+      setSuccess(false);
+      playChirp('error');
+      if (voiceActiveRef.current) {
+        speak('Error connecting to server.');
+      }
+      setMessage('Error connecting to server.');
+    }
+    mutationRef.current = false;
+    setDeleting(false);
+  }
 
   if (!categorySelected) {
     return <div className="workspace-page review-landing"><div className="page-heading"><div><p className="eyebrow">KEEP OPPORTUNITIES CURRENT</p><h1>Review jobs</h1><p>Choose a verification queue or find an employer to update.</p></div></div>
@@ -1498,6 +1568,7 @@ function HotJobsReview({ user }) {
                 <span>• "Pause"</span>
                 <span>• "Resume"</span>
                 <span>• "Save"</span>
+                <span>• "Delete job"</span>
                 <span>• "Help"</span>
               </div>
 
@@ -1650,10 +1721,13 @@ function HotJobsReview({ user }) {
             </div>
           )}
 
-          <div className="actions mt-2 mb-1" style={{ display: 'flex', gap: '1rem' }}>
-            <button type="button" className="btn secondary-btn" onClick={handleGoBack}>Cancel</button>
-            <button type="submit" className="btn primary-btn" disabled={saving}>
+          <div className="actions mt-2 mb-1" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            <button type="button" className="btn secondary-btn" onClick={handleGoBack} disabled={saving || deleting}>Cancel</button>
+            <button type="submit" className="btn primary-btn" disabled={saving || deleting}>
               {saving ? 'Updating...' : 'Update Job'}
+            </button>
+            <button type="button" className="subtle-button review-delete" onClick={handleDeleteJob} disabled={saving || deleting}>
+              <Trash2 size={16} />{deleting ? 'Deleting...' : 'Delete job'}
             </button>
           </div>
         </form>

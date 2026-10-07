@@ -1,5 +1,7 @@
+import { enteredZip } from './zipSearch.js';
+
 // Both modes use the existing search endpoint and its existing field names.
-export function hotJobFilters(formData) {
+export function hotJobFilters(formData, { zipOnly = false } = {}) {
   const company = String(formData.get('company_name') || '').trim();
   const address = String(formData.get('address') || '').trim();
   const jobTypes = formData.getAll('job_type');
@@ -13,6 +15,7 @@ export function hotJobFilters(formData) {
     ...(company ? { company_name: company } : {}),
     job_types: jobTypes,
     address,
+    ...(zipOnly ? { location_mode: 'zipcode', zipcode: enteredZip(address) } : {}),
     radius: formData.get('radius') || '20',
   };
 }

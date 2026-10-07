@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test:search": "node --test --test-isolation=none src/search.test.mjs src/hotJobFilters.test.mjs src/zipSearch.test.mjs src/components/contactDetails.test.mjs src/jobSearchResults.test.mjs",
+    "test:search": "node --test --test-isolation=none src/search.test.mjs src/hotJobFilters.test.mjs src/zipSearch.test.mjs src/components/contactDetails.test.mjs src/jobSearchResults.test.mjs src/hotJobReview.test.mjs",
     "test:routes": "node verify-routes.mjs",
     "preview": "vite preview"
   },

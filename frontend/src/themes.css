@@ -35,6 +35,7 @@ select::-webkit-scrollbar-thumb,.table-container::-webkit-scrollbar-thumb { back
 button:focus-visible,a:focus-visible,summary:focus-visible { outline-color: var(--primary-color); }
 .solid-button,.primary-btn { background: var(--accent); border-color: var(--accent); color: var(--button-text); }
 .solid-button:hover,.primary-btn:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.review-delete { color: var(--error); margin-left: auto; }
 .subtle-button,.secondary-btn { background: var(--surface); color: var(--text-dark); border-color: var(--glass-border); }
 .subtle-button:hover,.secondary-btn:hover,.icon-button:hover { background: var(--surface-soft); }
 .suite-brand,.section-navigation a.active,.section-navigation a:hover,.search-tabs button.selected { color: var(--primary-color); }

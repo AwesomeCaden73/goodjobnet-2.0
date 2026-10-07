@@ -1,10 +1,12 @@
 import os
-import csv
 import json
 import pygsheets
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend'))
+from drive_csv import CSV_DRIVE_ID, fetch_csv_content_from_drive, validated_csv_rows
 
 SERVICE_ACCOUNT_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend', 'credentials.json')
-CSV_FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'datafiles', 'JobSeekerList.csv')
 SPREADSHEET_ID = '1khmTUewP3EJremrR388R4-rjLZ8ej0RcnGyCfLFYpuY'
 
 def parse_complex_field(val):
@@ -32,8 +34,17 @@ def parse_complex_field(val):
     return val_str
 
 def sync_jobseekers_csv_to_drive():
-    if not os.path.exists(CSV_FILE_PATH):
-        raise FileNotFoundError(f"CSV file not found at {CSV_FILE_PATH}")
+    if "GOOGLE_CREDENTIALS" in os.environ:
+        try:
+            gc = pygsheets.authorize(service_account_env_var='GOOGLE_CREDENTIALS')
+        except Exception:
+            gc = pygsheets.authorize(service_file=SERVICE_ACCOUNT_FILE)
+    else:
+        gc = pygsheets.authorize(service_file=SERVICE_ACCOUNT_FILE)
+
+    csv_data = fetch_csv_content_from_drive(gc, CSV_DRIVE_ID)
+    reader = validated_csv_rows(csv_data)
+    source_desc = f"Google Drive (ID: {CSV_DRIVE_ID})"
 
     headers = [
         'Full Name',
@@ -49,33 +60,22 @@ def sync_jobseekers_csv_to_drive():
     ]
 
     matrix = [headers]
+    for r in reader:
+        row = [
+            r.get('FullName', '').strip(),
+            r.get('EmploymentAdvisor', '').strip(),
+            r.get('Phone', '').strip(),
+            r.get('City', '').strip(),
+            r.get('StreetAddress', '').strip(),
+            r.get('ZipCode', '').strip(),
+            parse_complex_field(r.get('JobTypesDesired')),
+            parse_complex_field(r.get('SpecialConsiderations')),
+            parse_complex_field(r.get('EngagementLevel')),
+            r.get('Comments', '').strip()
+        ]
+        matrix.append(row)
 
-    with open(CSV_FILE_PATH, mode='r', encoding='utf-8-sig') as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            row = [
-                r.get('FullName', '').strip(),
-                r.get('EmploymentAdvisor', '').strip(),
-                r.get('Phone', '').strip(),
-                r.get('City', '').strip(),
-                r.get('StreetAddress', '').strip(),
-                r.get('ZipCode', '').strip(),
-                parse_complex_field(r.get('JobTypesDesired')),
-                parse_complex_field(r.get('SpecialConsiderations')),
-                parse_complex_field(r.get('EngagementLevel')),
-                r.get('Comments', '').strip()
-            ]
-            matrix.append(row)
-
-    print(f"Prepared {len(matrix) - 1} rows of data from {CSV_FILE_PATH}.")
-
-    if "GOOGLE_CREDENTIALS" in os.environ:
-        try:
-            gc = pygsheets.authorize(service_account_env_var='GOOGLE_CREDENTIALS')
-        except Exception:
-            gc = pygsheets.authorize(service_file=SERVICE_ACCOUNT_FILE)
-    else:
-        gc = pygsheets.authorize(service_file=SERVICE_ACCOUNT_FILE)
+    print(f"Prepared {len(matrix) - 1} rows of data from {source_desc}.")
 
     sh = gc.open_by_key(SPREADSHEET_ID)
     wks = sh.sheet1

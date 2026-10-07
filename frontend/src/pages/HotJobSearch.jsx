@@ -6,7 +6,7 @@ import { JobGroups } from '../components/SearchCards';
 import JobTypePicker from '../components/JobTypePicker';
 import InformationPane from '../components/InformationPane';
 import { hotJobFilters } from '../hotJobFilters';
-import { enteredZip, zipOnlyJobs } from '../zipSearch';
+import { enteredZip } from '../zipSearch';
 import ZipOnlyToggle from '../components/ZipOnlyToggle';
 
 export default function HotJobSearch({ user }) {
@@ -32,14 +32,13 @@ export default function HotJobSearch({ user }) {
 
   const handleSearch = async e => {
     e.preventDefault();
-    const data = hotJobFilters(new FormData(e.currentTarget));
+    const data = hotJobFilters(new FormData(e.currentTarget), { zipOnly });
     const zip = enteredZip(data.address);
     if (zipOnly && !zip) {
       setError('Enter a five-digit ZIP code in Location to use ZIP-only search.');
       formRef.current.elements.address.focus();
       return;
     }
-    if (zipOnly) { data.radius = '0'; data.address = zip; }
     requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
@@ -57,10 +56,9 @@ export default function HotJobSearch({ user }) {
       if (!response.ok || !resultData.success) throw new Error(resultData.error || 'Search could not be completed. Please try again.');
       if (controller.signal.aborted) return;
       const checked = checkedJobResults(resultData.results);
-      const filtered = zipOnly ? await zipOnlyJobs(checked, zip, controller.signal) : checked;
       if (controller.signal.aborted) return;
       setSearched({ ...data, zipOnly, zip });
-      setResults(filtered);
+      setResults(checked);
     } catch (err) {
       if (err.name !== 'AbortError') setError(err.message || 'Search could not be completed. Please try again.');
     } finally {

@@ -21,3 +21,12 @@ test('location and role searches retain their original request shape without a c
 test('blank filters browse the existing job search scope', () => {
   assert.deepEqual(hotJobFilters(form({ company_name: ' ', other_job_type: ' ' })), { search_type: 'type-location', job_types: [], address: '', radius: '20' });
 });
+
+test('ZIP-only keeps company and job filters and sends the backend exact-ZIP contract', () => {
+  const data = hotJobFilters(form({ company_name: 'Example', job_type: ['Retail'], address: '12345 Main St, City 01234-5678' }), { zipOnly: true });
+  assert.equal(data.search_type, 'type-location');
+  assert.equal(data.company_name, 'Example');
+  assert.deepEqual(data.job_types, ['Retail']);
+  assert.equal(data.location_mode, 'zipcode');
+  assert.equal(data.zipcode, '01234');
+});

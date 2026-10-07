@@ -281,7 +281,7 @@ function AdminPage({ user }) {
             style={{ opacity: syncingCsv ? 0.7 : 1 }}
           >
             <FaSync className={syncingCsv ? 'spin' : ''} />
-            <h3>{syncingCsv ? 'Syncing JobSeeker CSV to Drive...' : 'Sync JobSeeker CSV to Google Drive'}</h3>
+            <h3>{syncingCsv ? 'Importing SharePoint CSV...' : 'Import SharePoint CSV from Drive'}</h3>
           </button>
         </div>
 

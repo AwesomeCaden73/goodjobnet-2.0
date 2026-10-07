@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import pygsheets
+from drive_csv import CSV_DRIVE_ID, fetch_csv_content_from_drive, validated_csv_rows
 import datetime
 import os
 import traceback
@@ -417,7 +418,9 @@ def submit_job():
             gc = get_gsheets_client()
             sh = gc.open_by_key(SPREADSHEET_ID_JOBS)
             wks = sh.worksheet_by_title(WORKSHEET_NAME_JOBS)
-            wks.append_table(values=[row_data])
+            col1_vals = wks.get_col(1, include_tailing_empty=False)
+            next_row = max(2, len(col1_vals) + 1)
+            wks.update_values(crange=f'A{next_row}', values=[row_data])
             invalidate_cache('new_jobs_records')
             invalidate_cache('master_jobs_records')
             return jsonify({"success": True, "message": "Job successfully added to Google Sheets!"})
@@ -546,6 +549,8 @@ def search_jobs():
             garbage_collector.collect()
 
     job_types = data.get("job_types", [])
+    location_mode = data.get("location_mode", "distance")
+    target_zipcode = str(data.get("zipcode") or "").strip()
     address = data.get("address", "")
     radius = data.get("radius", 20)
     
@@ -554,12 +559,18 @@ def search_jobs():
     except (ValueError, TypeError):
         radius = 20.0
         
+    target_zip_5 = None
+    if location_mode == "zipcode":
+        zip_matches = re.findall(r'\b\d{5}\b', target_zipcode)
+        if not zip_matches:
+            return jsonify({"success": False, "error": "A five-digit ZIP code is required"}), 400
+        target_zip_5 = zip_matches[-1]
+
     origin_zip = None
-    if address and address.strip():
-        import re
-        zip_match = re.search(r'\b\d{5}\b', address)
-        if zip_match:
-            origin_zip = zip_match.group(0)
+    if location_mode != "zipcode" and address and address.strip():
+        zip_matches = re.findall(r'\b\d{5}\b', address)
+        if zip_matches:
+            origin_zip = zip_matches[-1]
             
     try:
         all_records = get_master_jobs_records()
@@ -602,17 +613,31 @@ def search_jobs():
                 if not match:
                     continue
             
-            # Check distance if address and zip code are provided
+            # Check location filters
             dist_miles = float('inf')
-            if origin_zip:
-                import re
+            formatted_dist = ""
+
+            if location_mode == "zipcode":
+                if not target_zip_5:
+                    continue
                 job_zip_val = str(zip_val).strip()
-                # strip .0 if float conversion happened in spreadsheet
                 if job_zip_val.endswith('.0'):
                     job_zip_val = job_zip_val[:-2]
                 job_zip_match = re.search(r'\b\d{5}\b', job_zip_val)
                 if not job_zip_match:
-                    continue  # Skip jobs without a valid ZIP if location search is requested
+                    continue
+                job_zip_5 = job_zip_match.group(0)
+                if job_zip_5 != target_zip_5:
+                    continue
+                dist_miles = 0.0
+                formatted_dist = f"0.0 miles ({job_zip_5})"
+            elif origin_zip:
+                job_zip_val = str(zip_val).strip()
+                if job_zip_val.endswith('.0'):
+                    job_zip_val = job_zip_val[:-2]
+                job_zip_match = re.search(r'\b\d{5}\b', job_zip_val)
+                if not job_zip_match:
+                    continue
                 job_zip_5 = job_zip_match.group(0)
                 
                 if job_zip_5 == origin_zip:
@@ -628,6 +653,7 @@ def search_jobs():
                 
                 if dist_miles > radius:
                     continue
+                formatted_dist = f"{round(dist_miles, 1)} miles"
             
             location = f"{address_val}, {city_val}, {state_val}".strip(", ")
             
@@ -635,7 +661,7 @@ def search_jobs():
                 "company": company or "Unknown",
                 "role": role or "Various",
                 "location": location,
-                "distance": f"{round(dist_miles, 1)} miles" if dist_miles != float('inf') else ("" if not origin_zip else "N/A"),
+                "distance": formatted_dist,
                 "career_website": career_website,
                 "notes": notes_val,
                 "date_verified": date_verified_str
@@ -1018,7 +1044,7 @@ def update_hot_job():
         if submitter_col != -1 and submitter_name:
             wks.update_value((row_index, submitter_col), submitter_name)
             
-            invalidate_cache('master_jobs_records')
+        invalidate_cache('master_jobs_records')
         return jsonify({"success": True, "message": "Job successfully updated!"})
     except Exception as e:
         print(traceback.format_exc())
@@ -1095,6 +1121,42 @@ def update_seeker():
     finally:
         garbage_collector.collect()
 
+
+@app.route('/api/delete-hot-job', methods=['POST'])
+def delete_hot_job():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"success": False, "error": "Invalid request"}), 400
+    raw_index = data.get("row_index")
+    try:
+        if isinstance(raw_index, bool) or not re.fullmatch(r"[0-9]+", str(raw_index)):
+            raise ValueError
+        row_index = int(raw_index)
+        if row_index < 2:
+            raise ValueError
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "error": "A data row_index of 2 or greater is required"}), 400
+
+    try:
+        gc = get_gsheets_client()
+        try:
+            sh = gc.open_by_key("1NxDQTta3xvch5jn_j-DpWvGg0zRfJhpGnLv9rFQxw6I")
+        except Exception:
+            sh = gc.open_by_key(SPREADSHEET_ID_JOBS)
+
+        try:
+            wks = sh.worksheet_by_title("Destinations")
+        except Exception:
+            wks = sh.sheet1
+
+        wks.delete_rows(row_index)
+        invalidate_cache('master_jobs_records')
+        return jsonify({"success": True, "message": "Job successfully deleted from spreadsheet!"})
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": "Server Error", "details": str(e)}), 500
+    finally:
+        garbage_collector.collect()
 
 # Win32 Global Keyboard Hook & Window Closure for Accessibility
 import ctypes
@@ -1590,7 +1652,9 @@ def register():
             "PasswordHash": generate_password_hash(data.get("password", ""))
         }
         row_data = [row_dict.get(h, "") for h in headers]
-        wks.append_table(values=[row_data])
+        col1_vals = wks.get_col(1, include_tailing_empty=False)
+        next_row = max(2, len(col1_vals) + 1)
+        wks.update_values(crange=f'A{next_row}', values=[row_data])
         invalidate_cache('users_records')
         return jsonify({"success": True, "role": role})
     except Exception as e:
@@ -3006,7 +3070,7 @@ def export_jsearch_jobs():
 
         wks_postings.clear(start='A2')
         if manual_rows:
-            wks_postings.append_table(values=manual_rows)
+            wks_postings.update_values(crange='A2', values=manual_rows)
 
         # Build existing keys set from preserved manual rows
         existing_keys = set()
@@ -3224,7 +3288,9 @@ def export_jsearch_jobs():
 
         # 5. Append new rows to 'Job_Postings' worksheet
         if all_new_rows:
-            wks_postings.append_table(values=all_new_rows)
+            col1_vals = wks_postings.get_col(1, include_tailing_empty=False)
+            next_row = max(2, len(col1_vals) + 1)
+            wks_postings.update_values(crange=f'A{next_row}', values=all_new_rows)
 
         dup_msg = f" ({skipped_duplicates} existing duplicate job(s) skipped)" if skipped_duplicates > 0 else ""
 
@@ -3295,11 +3361,9 @@ def parse_csv_complex_field(val):
 @app.route('/api/sync-jobseekers-csv-to-drive', methods=['POST'])
 def sync_jobseekers_csv_to_drive():
     try:
-        csv_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'datafiles', 'JobSeekerList.csv')
-        if not os.path.exists(csv_file_path):
-            csv_file_path = os.path.join(os.path.dirname(__file__), '..', 'datafiles', 'JobSeekerList.csv')
-            if not os.path.exists(csv_file_path):
-                return jsonify({"success": False, "error": "datafiles/JobSeekerList.csv file not found."}), 400
+        gc = get_gsheets_client()
+        csv_text = fetch_csv_content_from_drive(gc, CSV_DRIVE_ID)
+        reader = validated_csv_rows(csv_text)
 
         headers = [
             'Full Name',
@@ -3316,22 +3380,20 @@ def sync_jobseekers_csv_to_drive():
 
         matrix = [headers]
 
-        with open(csv_file_path, mode='r', encoding='utf-8-sig') as f:
-            reader = csv.DictReader(f)
-            for r in reader:
-                row = [
-                    r.get('FullName', '').strip(),
-                    r.get('EmploymentAdvisor', '').strip(),
-                    r.get('Phone', '').strip(),
-                    r.get('City', '').strip(),
-                    r.get('StreetAddress', '').strip(),
-                    r.get('ZipCode', '').strip(),
-                    parse_csv_complex_field(r.get('JobTypesDesired')),
-                    parse_csv_complex_field(r.get('SpecialConsiderations')),
-                    parse_csv_complex_field(r.get('EngagementLevel')),
-                    r.get('Comments', '').strip()
-                ]
-                matrix.append(row)
+        for r in reader:
+            row = [
+                r.get('FullName', '').strip(),
+                r.get('EmploymentAdvisor', '').strip(),
+                r.get('Phone', '').strip(),
+                r.get('City', '').strip(),
+                r.get('StreetAddress', '').strip(),
+                r.get('ZipCode', '').strip(),
+                parse_csv_complex_field(r.get('JobTypesDesired')),
+                parse_csv_complex_field(r.get('SpecialConsiderations')),
+                parse_csv_complex_field(r.get('EngagementLevel')),
+                r.get('Comments', '').strip()
+            ]
+            matrix.append(row)
 
         gc = get_gsheets_client()
         sh = gc.open_by_key(SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT)
@@ -3351,6 +3413,8 @@ def sync_jobseekers_csv_to_drive():
             "count": len(matrix) - 1,
             "url": sheet_url
         })
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
     except Exception as e:
         print(traceback.format_exc())
         return jsonify({"success": False, "error": "Error syncing JobSeeker CSV to Google Drive", "details": str(e)}), 500
