@@ -237,7 +237,7 @@ def get_seekers_records():
         # 1. Try opening via pygsheets and service account (preferred)
         try:
             gc = get_gsheets_client()
-            sh = gc.open_by_key("1Ye9hgTVuqUtV8CQhFwLzZzCBz4E26otvJbjiVYRySJ0")
+            sh = gc.open_by_key(SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT)
             wks = sh.sheet1
             all_values = wks.get_all_values(include_tailing_empty_rows=False, include_tailing_empty=False)
             if not all_values:
@@ -251,7 +251,7 @@ def get_seekers_records():
             
         # 2. Try fetching via public CSV export as fallback
         try:
-            url = "https://docs.google.com/spreadsheets/d/1Ye9hgTVuqUtV8CQhFwLzZzCBz4E26otvJbjiVYRySJ0/export?format=csv"
+            url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT}/export?format=csv"
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=10) as response:
                 csv_data = response.read().decode('utf-8')
@@ -731,7 +731,7 @@ def dashboard_stats():
             total_seekers_matched = len(seekers_records)
             
             for row in seekers_records:
-                seeker_types = str(row.get("Type of Job Needed", "")).lower()
+                seeker_types = str(row.get("Desired Job Types", row.get("Type of Job Needed", ""))).lower()
                 matched_type = "Other"
                 for st in STANDARD_TYPES:
                     if st.lower() in seeker_types:
@@ -1673,10 +1673,10 @@ def job_seeker_matches_report():
         # 4. Generate report
         report = []
         for seeker in seekers_records:
-            name = seeker.get(" Name", seeker.get("Name", "Unknown"))
-            street = seeker.get("Street", "")
+            name = seeker.get("Full Name", seeker.get(" Name", seeker.get("Name", "Unknown")))
+            street = seeker.get("Street Address", seeker.get("Street", ""))
             city = seeker.get("City", "")
-            zip_val = seeker.get("Zip", seeker.get("Zipcode", ""))
+            zip_val = seeker.get("ZipCode", seeker.get("Zip", seeker.get("Zipcode", "")))
             
             if str(zip_val).endswith('.0'):
                 zip_val = str(zip_val)[:-2]
@@ -1684,7 +1684,7 @@ def job_seeker_matches_report():
                 
             address = f"{street} {city} {zipcode}".strip()
             skills = str(seeker.get("Skills/Education", ""))
-            desired_types_raw = str(seeker.get("Type of Job Needed", seeker.get("Desired Types", "")))
+            desired_types_raw = str(seeker.get("Desired Job Types", seeker.get("Type of Job Needed", seeker.get("Desired Types", ""))))
             
             if not desired_types_raw or desired_types_raw == "nan":
                 report.append({
@@ -1830,7 +1830,7 @@ def search_seekers():
         normalized_req_types = [normalize(jt) for jt in job_types if jt.strip()]
         
         for idx, seeker in enumerate(seekers_records):
-            name = seeker.get(" Name", seeker.get("Name", "Unknown")).strip()
+            name = seeker.get("Full Name", seeker.get(" Name", seeker.get("Name", "Unknown"))).strip()
             
             # 1. Filter by Name if provided (semi-loose check)
             if name_query:
@@ -1839,16 +1839,16 @@ def search_seekers():
             
             # 2. Filter by Job Type if name is not provided
             else:
-                street = str(seeker.get("Street", "")).strip()
+                street = str(seeker.get("Street Address", seeker.get("Street", ""))).strip()
                 city = str(seeker.get("City", "")).strip()
-                zip_val = str(seeker.get("Zip", seeker.get("Zipcode", ""))).strip()
+                zip_val = str(seeker.get("ZipCode", seeker.get("Zip", seeker.get("Zipcode", "")))).strip()
                 
                 if zip_val.endswith('.0'):
                     zip_val = zip_val[:-2]
                 seeker_zip = zip_val.strip()
                 
                 # Get and parse desired job types
-                seeker_job_types = str(seeker.get("Type of Job Needed", seeker.get("Desired Types", ""))).strip()
+                seeker_job_types = str(seeker.get("Desired Job Types", seeker.get("Type of Job Needed", seeker.get("Desired Types", "")))).strip()
                 
                 if job_types and not has_other:
                     seeker_types_list = [t.strip() for t in seeker_job_types.split(",") if t.strip()]
@@ -1866,9 +1866,9 @@ def search_seekers():
                         continue
             
             # Extract seeker location details
-            street = str(seeker.get("Street", "")).strip()
+            street = str(seeker.get("Street Address", seeker.get("Street", ""))).strip()
             city = str(seeker.get("City", "")).strip()
-            zip_val = str(seeker.get("Zip", seeker.get("Zipcode", ""))).strip()
+            zip_val = str(seeker.get("ZipCode", seeker.get("Zip", seeker.get("Zipcode", "")))).strip()
             
             if zip_val.endswith('.0'):
                 zip_val = zip_val[:-2]
@@ -1879,11 +1879,11 @@ def search_seekers():
             seeker_address = ", ".join(addr_parts)
             
             # Get phone and email
-            phone = str(seeker.get("Phone ") or seeker.get("Phone") or seeker.get("phone", "")).strip()
+            phone = str(seeker.get("Phone", seeker.get("Phone ") or seeker.get("phone", ""))).strip()
             email = str(seeker.get("email") or seeker.get("Email") or seeker.get("Email Address", "")).strip()
             
             # Get and parse desired job types
-            seeker_job_types = str(seeker.get("Type of Job Needed", seeker.get("Desired Types", ""))).strip()
+            seeker_job_types = str(seeker.get("Desired Job Types", seeker.get("Type of Job Needed", seeker.get("Desired Types", "")))).strip()
             
             # Calculate distance
             seeker_zip_5 = seeker_zip[:5] if seeker_zip else ""
@@ -2031,7 +2031,7 @@ def update_jobseeker_info():
                 jobBank_jobs = [j.strip() for j in available_jobs_str.split(",") if j.strip()]
                 
                 for seeker in seekers_records:
-                    seeker_job_type_str = str(seeker.get("Type of Job Needed", seeker.get("Desired Types", "")))
+                    seeker_job_type_str = str(seeker.get("Desired Job Types", seeker.get("Type of Job Needed", seeker.get("Desired Types", ""))))
                     if seeker_job_type_str:
                         seeker_jobs = [s.strip() for s in seeker_job_type_str.split(",") if s.strip()]
                         
@@ -2147,15 +2147,15 @@ def assigned_seekers():
         assigned = []
         
         for idx, seeker in enumerate(seekers_records):
-            coach_val = str(seeker.get("Employment Coach", "")).strip()
+            coach_val = str(seeker.get("Employment Advisor", seeker.get("Employment Coach", ""))).strip()
             if not coach_val:
                 continue
                 
             if matches_coach_loose(coach_val, coach):
-                name = seeker.get(" Name", seeker.get("Name", "Unknown")).strip()
-                street = str(seeker.get("Street", "")).strip()
+                name = seeker.get("Full Name", seeker.get(" Name", seeker.get("Name", "Unknown"))).strip()
+                street = str(seeker.get("Street Address", seeker.get("Street", ""))).strip()
                 city = str(seeker.get("City", "")).strip()
-                zip_val = str(seeker.get("Zip", seeker.get("Zipcode", ""))).strip()
+                zip_val = str(seeker.get("ZipCode", seeker.get("Zip", seeker.get("Zipcode", "")))).strip()
                 
                 if zip_val.endswith('.0'):
                     zip_val = zip_val[:-2]
@@ -2164,9 +2164,9 @@ def assigned_seekers():
                 addr_parts = [p for p in [street, city, seeker_zip] if p]
                 seeker_address = ", ".join(addr_parts)
                 
-                phone = str(seeker.get("Phone ") or seeker.get("Phone") or seeker.get("phone", "")).strip()
+                phone = str(seeker.get("Phone", seeker.get("Phone ") or seeker.get("phone", ""))).strip()
                 email = str(seeker.get("email") or seeker.get("Email") or seeker.get("Email Address", "")).strip()
-                seeker_job_types = str(seeker.get("Type of Job Needed", seeker.get("Desired Types", ""))).strip()
+                seeker_job_types = str(seeker.get("Desired Job Types", seeker.get("Type of Job Needed", seeker.get("Desired Types", "")))).strip()
                 
                 # Count matching jobs
                 seeker_types_list = [t.strip() for t in seeker_job_types.split(",") if t.strip()]
@@ -2231,9 +2231,9 @@ def seeker_matching_jobs():
                 if 0 <= idx < len(seekers):
                     seeker = seekers[idx]
                     if not seeker_job_types:
-                        seeker_job_types = seeker.get("Type of Job Needed", seeker.get("Desired Types", ""))
+                        seeker_job_types = seeker.get("Desired Job Types", seeker.get("Type of Job Needed", seeker.get("Desired Types", "")))
                     if not seeker_zip:
-                        zip_val = str(seeker.get("Zip", seeker.get("Zipcode", ""))).strip()
+                        zip_val = str(seeker.get("ZipCode", seeker.get("Zip", seeker.get("Zipcode", "")))).strip()
                         if zip_val.endswith('.0'):
                             zip_val = zip_val[:-2]
                         seeker_zip = zip_val
@@ -2525,7 +2525,7 @@ def import_jobseekers():
 
         # 2. Get current seekers from Google Sheets
         gc_client = get_gsheets_client()
-        sh_orig = gc_client.open_by_key("1Ye9hgTVuqUtV8CQhFwLzZzCBz4E26otvJbjiVYRySJ0")
+        sh_orig = gc_client.open_by_key(SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT)
         wks_orig = sh_orig.sheet1
         all_values = wks_orig.get_all_values(include_tailing_empty_rows=False, include_tailing_empty=False)
         
@@ -2692,7 +2692,7 @@ def import_jobseekers():
             wks_target.apply_format(ranges=ranges_to_highlight, format_info={'backgroundColor': {'red': 1.0, 'green': 0.85, 'blue': 0.85}})
         
         # Invalidate caches only if we wrote back to the original sheet
-        if IMPORT_SPREADSHEET_ID == "1Ye9hgTVuqUtV8CQhFwLzZzCBz4E26otvJbjiVYRySJ0":
+        if IMPORT_SPREADSHEET_ID == SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT:
             invalidate_cache('seekers_records')
             invalidate_cache('new_seekers_records')
         

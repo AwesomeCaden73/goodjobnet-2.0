@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { FaShieldAlt, FaUser, FaBriefcase, FaUserTie, FaSync, FaFileUpload, FaCloudDownloadAlt, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaShieldAlt, FaUser, FaBriefcase, FaUserTie, FaSync, FaCloudDownloadAlt, FaExternalLinkAlt } from 'react-icons/fa';
 
 function AdminPage({ user }) {
   const navigate = useNavigate();
@@ -12,13 +12,10 @@ function AdminPage({ user }) {
 
   const [updating, setUpdating] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
-  const [importing, setImporting] = useState(false);
-  const [importStatus, setImportStatus] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState(null);
   const [syncingCsv, setSyncingCsv] = useState(false);
   const [syncCsvStatus, setSyncCsvStatus] = useState(null);
-
 
   useEffect(() => {
     fetch('/api/dashboard-stats')
@@ -39,7 +36,6 @@ function AdminPage({ user }) {
   const handleUpdateJobSeekerInfo = () => {
     setUpdating(true);
     setUpdateStatus(null);
-    setImportStatus(null);
     setExportStatus(null);
     setSyncCsvStatus(null);
     fetch('/api/update-jobseeker-info', {
@@ -64,46 +60,10 @@ function AdminPage({ user }) {
       });
   };
 
-  const handleImportJobSeekers = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setImporting(true);
-    setImportStatus(null);
-    setUpdateStatus(null);
-    setExportStatus(null);
-    setSyncCsvStatus(null);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    fetch('/api/import-jobseekers', {
-      method: 'POST',
-      body: formData
-    })
-      .then(res => res.json())
-      .then(data => {
-        setImporting(false);
-        e.target.value = '';
-        if (data.success) {
-          setImportStatus({ success: true, message: data.message, url: data.url });
-        } else {
-          setImportStatus({ success: false, message: data.error || 'Failed to import.' });
-        }
-      })
-      .catch(err => {
-        setImporting(false);
-        e.target.value = '';
-        setImportStatus({ success: false, message: 'Network error occurred.' });
-        console.error('Error importing job seekers:', err);
-      });
-  };
-
   const handleExportJSearchJobs = () => {
     setExporting(true);
     setExportStatus(null);
     setUpdateStatus(null);
-    setImportStatus(null);
     setSyncCsvStatus(null);
     fetch('/api/export-jsearch-jobs', {
       method: 'POST',
@@ -144,7 +104,6 @@ function AdminPage({ user }) {
     setSyncingCsv(true);
     setSyncCsvStatus(null);
     setUpdateStatus(null);
-    setImportStatus(null);
     setExportStatus(null);
 
     fetch('/api/sync-jobseekers-csv-to-drive', {
@@ -244,23 +203,7 @@ function AdminPage({ user }) {
             <h3>{updating ? 'Updating jobBank info...' : 'Update jobBank jobSeeker information'}</h3>
           </button>
 
-          {/* Card 4: Import current Job Seeker List */}
-          <label
-            className="nav-card"
-            style={{ opacity: importing ? 0.7 : 1, margin: 0 }}
-          >
-            <FaFileUpload />
-            <h3>{importing ? 'Importing Job Seeker List...' : 'Import current Job Seeker List'}</h3>
-            <input
-              type="file"
-              accept=".xlsx"
-              onChange={handleImportJobSeekers}
-              disabled={importing}
-              style={{ display: 'none' }}
-            />
-          </label>
-
-          {/* Card 5: Export Jobs from JSearch */}
+          {/* Card 4: Export Jobs from JSearch */}
           <button
             type="button"
             onClick={handleExportJSearchJobs}
@@ -272,7 +215,7 @@ function AdminPage({ user }) {
             <h3>{exporting ? 'Exporting Jobs (JSearch & Companies)...' : 'Export Jobs (JSearch & Featured Companies)'}</h3>
           </button>
 
-          {/* Card 6: Sync JobSeeker CSV to Google Drive */}
+          {/* Card 5: Sync JobSeeker CSV to Google Drive */}
           <button
             type="button"
             onClick={handleSyncJobSeekersCsv}
@@ -286,43 +229,20 @@ function AdminPage({ user }) {
         </div>
 
         {/* Operation Status Feedback */}
-        {(updateStatus || importStatus || exportStatus || syncCsvStatus) && (
+        {(updateStatus || exportStatus || syncCsvStatus) && (
           <div style={{ marginTop: '1rem', marginBottom: '1.5rem', textAlign: 'center' }}>
             <p style={{
               fontSize: '1rem',
               fontWeight: 500,
-              color: (updateStatus?.success || importStatus?.success || syncCsvStatus?.success || (exportStatus?.success && !exportStatus?.jsearch_limit_exceeded)) ? 'var(--success)' : 'var(--error)',
+              color: (updateStatus?.success || syncCsvStatus?.success || (exportStatus?.success && !exportStatus?.jsearch_limit_exceeded)) ? 'var(--success)' : 'var(--error)',
               margin: 0
             }}>
-              {updateStatus ? updateStatus.message : importStatus ? importStatus.message : exportStatus ? exportStatus.message : syncCsvStatus.message}
+              {updateStatus ? updateStatus.message : exportStatus ? exportStatus.message : syncCsvStatus.message}
             </p>
             {exportStatus?.warning && (
               <p style={{ fontSize: '0.9rem', color: '#e67e22', fontWeight: 600, marginTop: '0.5rem' }}>
                 ⚠️ {exportStatus.warning}
               </p>
-            )}
-            {importStatus?.success && importStatus?.url && (
-              <div style={{ marginTop: '0.75rem' }}>
-                <a
-                  href={importStatus.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn secondary-btn"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    width: 'auto',
-                    padding: '0.5rem 1.25rem',
-                    fontSize: '0.85rem',
-                    background: 'rgba(255,255,255,0.8)',
-                    borderColor: 'var(--primary-color)',
-                    color: 'var(--primary-color)'
-                  }}
-                >
-                  Open Merged Seeker Spreadsheet <FaExternalLinkAlt style={{ fontSize: '0.75rem' }} />
-                </a>
-              </div>
             )}
             {exportStatus?.url && (
               <div style={{ marginTop: '0.75rem' }}>
