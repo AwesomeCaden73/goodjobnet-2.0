@@ -431,65 +431,6 @@ def submit_job():
 
 
 
-@app.route('/api/submit-seeker', methods=['POST'])
-def submit_seeker():
-    try:
-        data = request.json
-        if not data:
-            return jsonify({"success": False, "error": "No data provided"}), 400
-
-        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-
-        # Assuming these fields from frontend
-        row_data = [
-            data.get("name", ""),
-            data.get("street", ""),
-            data.get("city", ""),
-            data.get("zipcode", ""),
-            data.get("ward", ""),
-            data.get("stake", ""),
-            data.get("phone", ""),
-            data.get("email", ""),
-            data.get("skills_education", ""),
-            data.get("job_needed", ""),
-            ", ".join(data.get("desired_job_types", [])),
-            data.get("general_notes", ""),
-            "Yes" if data.get("resume_assistance") else "No",
-            "Yes" if data.get("interview_coaching") else "No",
-            "Yes" if data.get("job_search_assistance") else "No",
-            current_date,
-            data.get("submitter_name", ""),
-            data.get("submitter_ward", ""),
-            data.get("submitter_stake", ""),
-            data.get("submitter_phone", ""),
-            data.get("submitter_email", "")
-        ]
-
-        try:
-            gc = get_gsheets_client()
-            try:
-                sh = gc.open(SPREADSHEET_NAME_SEEKERS)
-            except pygsheets.SpreadsheetNotFound:
-                sh = gc.create(SPREADSHEET_NAME_SEEKERS)
-            
-            try:
-                wks = sh.worksheet_by_title(WORKSHEET_NAME_SEEKERS)
-            except pygsheets.WorksheetNotFound:
-                wks = sh.sheet1
-                wks.title = WORKSHEET_NAME_SEEKERS
-                # Set headers if new
-                wks.update_row(1, ["Name", "Street", "City", "Zipcode", "Ward", "Stake", "Phone", "Email", "Skills/Education", "Job Needed", "Desired Types", "General Notes", "Resume Asst", "Interview Coach", "Job Search Asst", "Date Entered", "Entered by - Name", "Ward", "Stake", "Phone", "email"])
-                
-            wks.append_table(values=[row_data])
-            invalidate_cache('new_seekers_records')
-            return jsonify({"success": True, "message": "Job Seeker successfully added to Google Sheets!"})
-        except Exception as e:
-            print(traceback.format_exc())
-            return jsonify({"success": False, "error": "Server Error", "details": str(e)}), 500
-    finally:
-        garbage_collector.collect()
-
-
 @app.route('/api/search-jobs', methods=['POST'])
 def search_jobs():
     data = request.json
@@ -548,6 +489,8 @@ def search_jobs():
             garbage_collector.collect()
 
     job_types = data.get("job_types", [])
+    location_mode = data.get("location_mode", "distance")
+    target_zipcode = data.get("zipcode", "").strip()
     address = data.get("address", "")
     radius = data.get("radius", 20)
     
@@ -556,8 +499,17 @@ def search_jobs():
     except (ValueError, TypeError):
         radius = 20.0
         
+    target_zip_5 = None
+    if location_mode == "zipcode" and target_zipcode:
+        import re
+        zip_match = re.search(r'\b\d{5}\b', target_zipcode)
+        if zip_match:
+            target_zip_5 = zip_match.group(0)
+        else:
+            target_zip_5 = target_zipcode[:5]
+
     origin_zip = None
-    if address and address.strip():
+    if location_mode != "zipcode" and address and address.strip():
         import re
         zip_match = re.search(r'\b\d{5}\b', address)
         if zip_match:
@@ -604,17 +556,33 @@ def search_jobs():
                 if not match:
                     continue
             
-            # Check distance if address and zip code are provided
+            # Check location filters
             dist_miles = float('inf')
-            if origin_zip:
+            formatted_dist = ""
+
+            if location_mode == "zipcode":
+                if not target_zip_5:
+                    continue
+                job_zip_val = str(zip_val).strip()
+                if job_zip_val.endswith('.0'):
+                    job_zip_val = job_zip_val[:-2]
+                import re
+                job_zip_match = re.search(r'\b\d{5}\b', job_zip_val)
+                if not job_zip_match:
+                    continue
+                job_zip_5 = job_zip_match.group(0)
+                if job_zip_5 != target_zip_5:
+                    continue
+                dist_miles = 0.0
+                formatted_dist = f"0.0 miles ({job_zip_5})"
+            elif origin_zip:
                 import re
                 job_zip_val = str(zip_val).strip()
-                # strip .0 if float conversion happened in spreadsheet
                 if job_zip_val.endswith('.0'):
                     job_zip_val = job_zip_val[:-2]
                 job_zip_match = re.search(r'\b\d{5}\b', job_zip_val)
                 if not job_zip_match:
-                    continue  # Skip jobs without a valid ZIP if location search is requested
+                    continue
                 job_zip_5 = job_zip_match.group(0)
                 
                 if job_zip_5 == origin_zip:
@@ -630,6 +598,7 @@ def search_jobs():
                 
                 if dist_miles > radius:
                     continue
+                formatted_dist = f"{round(dist_miles, 1)} miles"
             
             location = f"{address_val}, {city_val}, {state_val}".strip(", ")
             
@@ -637,7 +606,7 @@ def search_jobs():
                 "company": company or "Unknown",
                 "role": role or "Various",
                 "location": location,
-                "distance": f"{round(dist_miles, 1)} miles" if dist_miles != float('inf') else ("" if not origin_zip else "N/A"),
+                "distance": formatted_dist,
                 "career_website": career_website,
                 "notes": notes_val,
                 "date_verified": date_verified_str
@@ -1058,73 +1027,7 @@ def delete_hot_job():
         garbage_collector.collect()
 
 
-@app.route('/api/update-seeker', methods=['POST'])
-def update_seeker():
-    data = request.json
-    if not data or not data.get("row_index"):
-        return jsonify({"success": False, "error": "No data or row_index provided"}), 400
-        
-    try:
-        gc = get_gsheets_client()
-        try:
-            sh = gc.open_by_key("1Ye9hgTVuqUtV8CQhFwLzZzCBz4E26otvJbjiVYRySJ0")
-        except Exception as e:
-            print(f"Error opening seeker sheet by key: {e}")
-            sh = gc.open(SPREADSHEET_NAME_SEEKERS)
-            
-        wks = sh.sheet1
-        headers = wks.get_row(1)
-        normalized_headers = [h.strip() for h in headers]
-        row_index = int(data.get("row_index"))
-        
-        field_mapping = {
-            "name": ["Name", " Name"],
-            "street": ["Street"],
-            "city": ["City"],
-            "zipcode": ["Zipcode", "Zip"],
-            "ward": ["Ward"],
-            "stake": ["Stake"],
-            "phone": ["Phone", "Phone ", "phone"],
-            "email": ["Email", "email", "Email Address"],
-            "skills_education": ["Skills/Education"],
-            "job_needed": ["Job Needed", "Company Type"],
-            "desired_job_types": ["Desired Types", "Type of Job Needed"],
-            "general_notes": ["General Notes", "Notes"],
-            "resume_assistance": ["Resume Asst Needed", "Resume Asst", "Resume assistance"],
-            "interview_coaching": ["Interview Coach Needed", "Interview Coach", "Interview coaching"],
-            "job_search_assistance": ["Job Search Asst Needed", "Job Search Asst", "Job Search assistance"]
-        }
-        
-        for key, possible_headers in field_mapping.items():
-            if key in data:
-                val = data[key]
-                if key in ["resume_assistance", "interview_coaching", "job_search_assistance"]:
-                    val = "Yes" if val else "No"
-                elif key == "desired_job_types" and isinstance(val, list):
-                    val = ", ".join(val)
-                
-                # Find matching header
-                col_idx = -1
-                for h in possible_headers:
-                    if h in headers:
-                        col_idx = headers.index(h) + 1
-                        break
-                    h_norm = h.strip()
-                    if h_norm in normalized_headers:
-                        col_idx = normalized_headers.index(h_norm) + 1
-                        break
-                
-                if col_idx != -1:
-                    wks.update_value((row_index, col_idx), str(val))
-                    
-        invalidate_cache('seekers_records')
-        invalidate_cache('new_seekers_records')
-        return jsonify({"success": True, "message": "Job Seeker successfully updated!"})
-    except Exception as e:
-        print(traceback.format_exc())
-        return jsonify({"success": False, "error": "Server Error", "details": str(e)}), 500
-    finally:
-        garbage_collector.collect()
+
 
 
 # Win32 Global Keyboard Hook & Window Closure for Accessibility

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { FaBriefcase, FaUserTie, FaSearch } from 'react-icons/fa';
+import { FaBriefcase, FaUserTie, FaSearch, FaMapMarkedAlt } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
 
 function EmploymentCenterDashboard({ user }) {
@@ -247,6 +247,10 @@ function EmploymentCenterDashboard({ user }) {
 
         {/* Bottom Section: Actions */}
         <div className="nav-grid">
+          <a href="https://www.google.com/maps/d/u/0/edit?mid=1YnckZ2k4jyCu6Agxg4VX0EyWK49puuo&ll=28.284392717060463%2C-82.04171770869505&z=9" target="_blank" rel="noopener noreferrer" className="nav-card">
+            <FaMapMarkedAlt />
+            <h3>Job Location Map</h3>
+          </a>
           <Link to="/job-entry" className="nav-card">
             <FaBriefcase />
             <h3>Job Entry Form</h3>
@@ -258,10 +262,6 @@ function EmploymentCenterDashboard({ user }) {
           <Link to="/job-seeker-search" className="nav-card">
             <FaUserTie />
             <h3>Search for nearby job seekers</h3>
-          </Link>
-          <Link to="/job-seeker-entry" className="nav-card">
-            <FaUserTie />
-            <h3>Job Seeker Entry</h3>
           </Link>
         </div>
 

@@ -609,17 +609,7 @@ function HotJobsReview({ user }) {
       }
     }
     window.speechSynthesis.cancel();
-    if (location.state?.fromEntry) {
-      navigate('/job-seeker-entry', {
-        state: {
-          seeker: location.state.seeker,
-          fromAssigned: location.state.fromAssigned,
-          fromSearch: location.state.fromSearch
-        }
-      });
-    } else {
-      navigate('/hot-jobs-review', { replace: true });
-    }
+    navigate('/hot-jobs-review', { replace: true });
   };
 
   // URL queries parser on mount/location change
