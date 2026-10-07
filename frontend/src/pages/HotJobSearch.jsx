@@ -5,7 +5,19 @@ function HotJobSearch({ user }) {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [searchMode, setSearchMode] = useState('type-location');
+  const [locationMode, setLocationMode] = useState('distance');
+  const [radius, setRadius] = useState('20');
+  const [zipcode, setZipcode] = useState('');
   const navigate = useNavigate();
+
+  const handleLocationModeChange = (mode) => {
+    setLocationMode(mode);
+    if (mode === 'zipcode') {
+      setZipcode('');
+    } else {
+      setRadius('20');
+    }
+  };
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -25,12 +37,28 @@ function HotJobSearch({ user }) {
       if (otherJobType && otherJobType.trim() !== '') {
         jobTypes.push(otherJobType.trim());
       }
-      data = {
-        search_type: 'type-location',
-        job_types: jobTypes,
-        address: formData.get('address'),
-        radius: formData.get('radius')
-      };
+      if (locationMode === 'zipcode') {
+        const targetZip = zipcode.trim();
+        if (!targetZip) {
+          alert('Please enter a desired zipcode to search.');
+          setLoading(false);
+          return;
+        }
+        data = {
+          search_type: 'type-location',
+          location_mode: 'zipcode',
+          job_types: jobTypes,
+          zipcode: targetZip
+        };
+      } else {
+        data = {
+          search_type: 'type-location',
+          location_mode: 'distance',
+          job_types: jobTypes,
+          address: formData.get('address') || '',
+          radius: radius || 20
+        };
+      }
     }
 
     try {
@@ -62,7 +90,7 @@ function HotJobSearch({ user }) {
           <p className="subtitle">
             {searchMode === 'company' 
               ? 'Find potential jobs by company name' 
-              : 'Find potential jobs based on radius and job type'}
+              : 'Find potential jobs based on location and job type'}
           </p>
         </header>
 
@@ -173,19 +201,116 @@ function HotJobSearch({ user }) {
               </div>
 
               <div className="input-group">
-                <label>Find a job near this location (Street, City, Zipcode)</label>
-                <textarea name="address" rows="4" placeholder="Enter full address..."></textarea>
-              </div>
-
-              <div className="input-group">
                 <label>Other Job Type (Not in list)</label>
                 <input type="text" name="other_job_type" placeholder="Enter other job type..." />
               </div>
 
-              <div className="input-group">
-                <label>List jobs within radius of (miles)</label>
-                <input type="number" name="radius" defaultValue="20" min="1" />
-              </div>
+              {locationMode === 'distance' ? (
+                <>
+                  <div className="input-group">
+                    <label>Find a job near this location (Street, City, Zipcode)</label>
+                    <textarea name="address" rows="4" placeholder="Enter full address..."></textarea>
+                  </div>
+
+                  <div className="input-group">
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'flex-start',
+                      alignItems: 'center',
+                      gap: '1.2rem',
+                      marginBottom: '0.6rem',
+                      width: '100%',
+                      flexWrap: 'wrap'
+                    }}>
+                      <span style={{ fontSize: '1.05rem', fontWeight: '700', color: 'var(--text-dark)' }}>Search Option:</span>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', color: 'var(--text-dark)', margin: 0 }}>
+                        <input 
+                          type="radio" 
+                          name="location_mode_radio" 
+                          value="distance" 
+                          checked={locationMode === 'distance'} 
+                          onChange={() => handleLocationModeChange('distance')} 
+                        />
+                        Distance (Radius)
+                      </label>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', color: 'var(--text-dark)', margin: 0 }}>
+                        <input 
+                          type="radio" 
+                          name="location_mode_radio" 
+                          value="zipcode" 
+                          checked={locationMode === 'zipcode'} 
+                          onChange={() => handleLocationModeChange('zipcode')} 
+                        />
+                        Jobs within zipcode
+                      </label>
+                    </div>
+
+                    <label>List jobs within radius of (miles)</label>
+                    <input 
+                      key="input-radius"
+                      type="number" 
+                      name="radius" 
+                      value={radius} 
+                      onChange={(e) => setRadius(e.target.value)}
+                      min="1" 
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="input-group">
+                    {/* Empty placeholder to keep right grid alignment */}
+                  </div>
+
+                  <div className="input-group">
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'flex-start',
+                      alignItems: 'center',
+                      gap: '1.2rem',
+                      marginBottom: '0.6rem',
+                      width: '100%',
+                      flexWrap: 'wrap'
+                    }}>
+                      <span style={{ fontSize: '1.05rem', fontWeight: '700', color: 'var(--text-dark)' }}>Search Option:</span>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', color: 'var(--text-dark)', margin: 0 }}>
+                        <input 
+                          type="radio" 
+                          name="location_mode_radio" 
+                          value="distance" 
+                          checked={locationMode === 'distance'} 
+                          onChange={() => handleLocationModeChange('distance')} 
+                        />
+                        Distance (Radius)
+                      </label>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', color: 'var(--text-dark)', margin: 0 }}>
+                        <input 
+                          type="radio" 
+                          name="location_mode_radio" 
+                          value="zipcode" 
+                          checked={locationMode === 'zipcode'} 
+                          onChange={() => handleLocationModeChange('zipcode')} 
+                        />
+                        Jobs within zipcode
+                      </label>
+                    </div>
+
+                    <label>Desired Zipcode <span className="required">*</span></label>
+                    <input 
+                      key="input-zipcode"
+                      type="text" 
+                      name="target_zipcode" 
+                      value={zipcode}
+                      onChange={(e) => setZipcode(e.target.value)}
+                      placeholder="Enter desired 5-digit zipcode (e.g. 34741)..." 
+                      required 
+                    />
+                    <small style={{ color: 'var(--text-light)', marginTop: '0.3rem', display: 'block' }}>
+                      Only job opportunities in this exact zipcode will be returned.
+                    </small>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

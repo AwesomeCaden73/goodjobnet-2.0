@@ -487,6 +487,8 @@ def search_jobs():
             garbage_collector.collect()
 
     job_types = data.get("job_types", [])
+    location_mode = data.get("location_mode", "distance")
+    target_zipcode = data.get("zipcode", "").strip()
     address = data.get("address", "")
     radius = data.get("radius", 20)
     
@@ -495,8 +497,17 @@ def search_jobs():
     except (ValueError, TypeError):
         radius = 20.0
         
+    target_zip_5 = None
+    if location_mode == "zipcode" and target_zipcode:
+        import re
+        zip_match = re.search(r'\b\d{5}\b', target_zipcode)
+        if zip_match:
+            target_zip_5 = zip_match.group(0)
+        else:
+            target_zip_5 = target_zipcode[:5]
+
     origin_zip = None
-    if address and address.strip():
+    if location_mode != "zipcode" and address and address.strip():
         import re
         zip_match = re.search(r'\b\d{5}\b', address)
         if zip_match:
@@ -543,17 +554,33 @@ def search_jobs():
                 if not match:
                     continue
             
-            # Check distance if address and zip code are provided
+            # Check location filters
             dist_miles = float('inf')
-            if origin_zip:
+            formatted_dist = ""
+
+            if location_mode == "zipcode":
+                if not target_zip_5:
+                    continue
+                job_zip_val = str(zip_val).strip()
+                if job_zip_val.endswith('.0'):
+                    job_zip_val = job_zip_val[:-2]
+                import re
+                job_zip_match = re.search(r'\b\d{5}\b', job_zip_val)
+                if not job_zip_match:
+                    continue
+                job_zip_5 = job_zip_match.group(0)
+                if job_zip_5 != target_zip_5:
+                    continue
+                dist_miles = 0.0
+                formatted_dist = f"0.0 miles ({job_zip_5})"
+            elif origin_zip:
                 import re
                 job_zip_val = str(zip_val).strip()
-                # strip .0 if float conversion happened in spreadsheet
                 if job_zip_val.endswith('.0'):
                     job_zip_val = job_zip_val[:-2]
                 job_zip_match = re.search(r'\b\d{5}\b', job_zip_val)
                 if not job_zip_match:
-                    continue  # Skip jobs without a valid ZIP if location search is requested
+                    continue
                 job_zip_5 = job_zip_match.group(0)
                 
                 if job_zip_5 == origin_zip:
@@ -569,6 +596,7 @@ def search_jobs():
                 
                 if dist_miles > radius:
                     continue
+                formatted_dist = f"{round(dist_miles, 1)} miles"
             
             location = f"{address_val}, {city_val}, {state_val}".strip(", ")
             
@@ -576,7 +604,7 @@ def search_jobs():
                 "company": company or "Unknown",
                 "role": role or "Various",
                 "location": location,
-                "distance": f"{round(dist_miles, 1)} miles" if dist_miles != float('inf') else ("" if not origin_zip else "N/A"),
+                "distance": formatted_dist,
                 "career_website": career_website,
                 "notes": notes_val,
                 "date_verified": date_verified_str
