@@ -34,8 +34,8 @@ export default function HotJobSearch({ user }) {
     e.preventDefault();
     const data = hotJobFilters(new FormData(e.currentTarget), { zipOnly });
     const zip = enteredZip(data.address);
-    if (zipOnly && !zip) {
-      setError('Enter a five-digit ZIP code in Location to use ZIP-only search.');
+    if ((zipOnly || data.address.trim()) && !zip) {
+      setError('Enter a five-digit ZIP code in Location, or leave Location blank to browse.');
       formRef.current.elements.address.focus();
       return;
     }
@@ -60,7 +60,7 @@ export default function HotJobSearch({ user }) {
       setSearched({ ...data, zipOnly, zip });
       setResults(checked);
     } catch (err) {
-      if (err.name !== 'AbortError') setError(err.message || 'Search could not be completed. Please try again.');
+      if (err.name !== 'AbortError') setError('Search could not be completed. Please try again.');
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
@@ -81,14 +81,14 @@ export default function HotJobSearch({ user }) {
   return <div className="workspace-page search-page streamlined-job-search">
     <div className="page-heading"><div><p className="eyebrow">FIND YOUR NEXT OPPORTUNITY</p><h1>Job Search</h1><p>Find the right opportunity. Use any combination of filters.</p></div><Link className="subtle-button" to="/search"><Search size={16} />Universal search</Link></div>
     <section className="surface combined-job-filter"><form ref={formRef} onSubmit={handleSearch} aria-label="Job search filters">
-      <div className="job-search-primary"><div className="input-group"><label htmlFor="hotjobsearch-company_name">Company</label><div className="search-field-icon"><BriefcaseBusiness size={18} /><input id="hotjobsearch-company_name" name="company_name" placeholder="Any company" /></div></div><div className="input-group"><label htmlFor="hotjobsearch-address">Location</label><div className="search-field-icon"><MapPin size={18} /><input id="hotjobsearch-address" name="address" placeholder="City or address with ZIP code" aria-describedby="job-location-hint" /></div></div><div className="input-group"><label htmlFor="hotjobsearch-radius">Radius (miles)</label><input id="hotjobsearch-radius" type="number" name="radius" defaultValue="20" min="1" disabled={zipOnly} required={!zipOnly} /></div></div>
+      <div className="job-search-primary"><div className="input-group"><label htmlFor="hotjobsearch-company_name">Company</label><div className="search-field-icon"><BriefcaseBusiness size={18} /><input id="hotjobsearch-company_name" name="company_name" placeholder="Any company" /></div></div><div className="input-group"><label htmlFor="hotjobsearch-address">Location</label><div className="search-field-icon"><MapPin size={18} /><input id="hotjobsearch-address" name="address" placeholder="ZIP code or address including ZIP" aria-describedby="job-location-hint" /></div></div><div className="input-group"><label htmlFor="hotjobsearch-radius">Radius (miles)</label><input id="hotjobsearch-radius" type="number" name="radius" defaultValue="20" min="1" disabled={zipOnly} required={!zipOnly} /></div></div>
       <div className="zip-filter-row"><ZipOnlyToggle id="job-zip-only" checked={zipOnly} onChange={setZipOnly} /><span className="muted">Match the entered ZIP exactly instead of using a radius.</span></div>
       <div className="job-search-secondary"><JobTypePicker selected={jobTypes} onChange={setJobTypes} /><div className="input-group"><label htmlFor="hotjobsearch-other_job_type">Additional job type</label><input id="hotjobsearch-other_job_type" name="other_job_type" placeholder="Any role or job type" /></div></div>
       <div className="job-search-submit"><p id="job-location-hint" className="muted">Include a five-digit ZIP code to search by distance.</p><div><button type="button" className="subtle-button" onClick={clearFilters}><RotateCcw size={15} />Clear filters</button><button type="submit" className="solid-button" disabled={loading}><Search size={17} />{loading ? 'Searching…' : 'Search jobs'}</button></div></div>
     </form></section>
     {error && <p className="inline-error" role="alert">{error}</p>}
     {loading && <p className="search-loading" role="status">Searching opportunities…</p>}
-    {!loading && results && <section ref={resultsRef} tabIndex={-1} className="job-search-results" aria-labelledby="job-results-heading"><div className="section-heading"><div><h2 id="job-results-heading">Search results <span className="result-count">{count}</span></h2><p>{searched?.zipOnly ? 'Showing jobs in ZIP ' + searched.zip + ' only.' : searched?.search_type === 'company' ? 'Company matches across all verification dates.' : 'Matching opportunities verified within the past two years, or with no readable verification date.'}</p></div><button type="button" className="text-link" onClick={() => { formRef.current.scrollIntoView({ behavior: 'auto', block: 'center' }); formRef.current.elements.company_name.focus({ preventScroll: true }); }}>Adjust filters</button></div><>{count ? <JobGroups results={results} onSelect={setSelection} /> : <div className="empty-state search-start"><Search size={28} /><h3>No opportunities match these filters</h3><p>Try a broader company name, another job type, or a larger radius.</p></div>}</></section>}
+    {!loading && results && <section ref={resultsRef} tabIndex={-1} className="job-search-results" aria-labelledby="job-results-heading"><div className="section-heading"><div><h2 id="job-results-heading">Search results <span className="result-count">{count}</span></h2><p>{searched?.zipOnly ? 'Showing jobs in ZIP ' + searched.zip + ' only.' : searched?.search_type === 'company' ? 'Company matches across all verification dates.' : 'Matching opportunities verified within the past two years, or with no readable verification date.'}</p></div><button type="button" className="text-link" onClick={() => { formRef.current.scrollIntoView({ behavior: 'auto', block: 'center' }); formRef.current.elements.company_name.focus({ preventScroll: true }); }}>Adjust filters</button></div><>{count ? <JobGroups results={results} onSelect={setSelection} /> : <div className="empty-state search-start"><Search size={28} /><h3>No opportunities match these filters</h3><p>{searched?.zipOnly ? 'Try another job type or turn off ZIP-only search to include nearby ZIP codes.' : 'Try a broader company name, another job type, or a larger radius.'}</p></div>}</></section>}
     {!loading && !results && <div className="empty-state search-start"><Search size={28} /><h2>Your next opportunity is out there</h2><p>Start with a company, a job type, or a nearby ZIP code. Leave filters blank to browse.</p></div>}
     {selection && <InformationPane canEdit={!!user} selection={selection} onClose={() => setSelection(null)} />}
   </div>;

@@ -25,7 +25,7 @@ export default function Shell({ user, onLogout }) {
   const panelRef = useRef(null);
   const available = visibleApps(user);
   const active = available.find(a => a.path === location.pathname);
-  const routeNames = { '/dashboard': 'Home', '/employment-dashboard': 'Home', '/job-seeker-dashboard': 'Home', '/job-entry': 'Add opportunity', '/job-seeker-entry': location.state?.seeker ? 'Job seeker details' : 'Add job seeker', '/hot-jobs-5review': 'Expiring jobs', '/hot-jobs-46review': 'Expired jobs', '/search': 'Search', '/create': 'Create' };
+  const routeNames = { '/map': 'Job map', '/assigned-job-seekers': 'My people', '/dashboard': 'Home', '/employment-dashboard': 'Home', '/job-seeker-dashboard': 'Home', '/job-entry': 'Add opportunity', '/job-seeker-entry': location.state?.seeker ? 'Job seeker details' : 'Add job seeker', '/hot-jobs-5review': 'Expiring jobs', '/hot-jobs-46review': 'Expired jobs', '/search': 'Search', '/create': 'Create' };
   const pageTitle = active?.title || (location.pathname === '/apps' ? 'Apps' : routeNames[location.pathname]) || 'Page not found';
   const createArea = ['/create', '/job-entry', '/job-seeker-entry'].includes(location.pathname);
   const reviewArea = location.pathname.includes('review');

@@ -1,8 +1,11 @@
+import useUnsavedChanges from '../components/useUnsavedChanges';
+import StateOptions from '../components/StateOptions';
 import EntryJobTypes from '../components/EntryJobTypes';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 function JobEntry({ user }) {
+  const { formProps, markSaved, confirmDiscard } = useUnsavedChanges();
   const [formKey, setFormKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -53,15 +56,16 @@ function JobEntry({ user }) {
       });
       const result = await response.json();
       if (result.success) {
+        markSaved();
         setSuccess(true);
-        setMessage('Job successfully added to database!');
+        setMessage('Job submitted for review. It will appear in search after the employment center approves it.');
         e.target.reset();
         setFormKey(key => key + 1);
       } else {
         setSuccess(false);
         setMessage(result.error || 'Failed to submit Job.');
       }
-    } catch (err) {
+    } catch {
       setSuccess(false);
       setMessage('Error connecting to server.');
     }
@@ -76,7 +80,7 @@ function JobEntry({ user }) {
           <p className="subtitle">Submit new potential jobs to the Orlando Employment Center</p>
         </header>
 
-        <form key={formKey} onSubmit={handleSubmit}>
+        <form {...formProps} key={formKey} onSubmit={handleSubmit}>
           <fieldset className="entry-section"><legend>Company & location</legend><p>Where is this opportunity based?</p><div className="form-grid">
 
             <div className="input-group">
@@ -119,21 +123,12 @@ function JobEntry({ user }) {
 
             <div className="input-group">
               <label htmlFor="jobentry-company_state">Company State <span className="required">*</span></label>
-              <select id="jobentry-company_state" name="company_state" required>
-                <option value="">Select State...</option>
-                <option value="FL">Florida</option>
-                {/* Simplified for demo, add all states as needed */}
-                <option value="AL">Alabama</option>
-                <option value="GA">Georgia</option>
-                <option value="TX">Texas</option>
-                <option value="NY">New York</option>
-                <option value="CA">California</option>
-              </select>
+              <select id="jobentry-company_state" name="company_state" required><StateOptions /></select>
             </div>
 
             <div className="input-group">
               <label htmlFor="jobentry-company_zip">Company Zipcode <span className="required">*</span></label>
-              <input id="jobentry-company_zip" type="text" name="company_zip" required />
+              <input id="jobentry-company_zip" type="text" name="company_zip" inputMode="numeric" pattern="[0-9]{5}(-[0-9]{4})?" title="Enter a five-digit ZIP code or ZIP+4." required />
             </div>
 
 
@@ -171,7 +166,7 @@ function JobEntry({ user }) {
 
             <div className="input-group full-width">
               <EntryJobTypes name="available_jobs_select" label="Available job types" />
-              <input type="text" name="available_jobs_manual" placeholder="Other available jobs (comma separated)" style={{ marginTop: '0.5rem' }} />
+              <label htmlFor="manual-jobs" style={{ display: 'block', marginTop: '1rem' }}>Other available jobs</label><input id="manual-jobs" type="text" name="available_jobs_manual" placeholder="Other available jobs (comma separated)" style={{ marginTop: '0.5rem' }} />
             </div>
 
             <div className="input-group full-width">
@@ -182,13 +177,13 @@ function JobEntry({ user }) {
           </div></fieldset>
 
           {message && (
-            <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? 'var(--success)' : 'var(--error)' }}>
+            <div role={success ? "status" : "alert"} style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? 'var(--success)' : 'var(--error)' }}>
               {message}
             </div>
           )}
 
           <div className="actions entry-actions">
-            <button type="button" className="btn secondary-btn" onClick={() => navigate('/create')}>Cancel</button>
+            <button type="button" className="btn secondary-btn" onClick={() => { if (confirmDiscard()) navigate('/create'); }}>Cancel</button>
             <button type="submit" className="btn primary-btn" disabled={loading}>
               {loading ? 'Submitting...' : 'Submit Job'}
             </button>

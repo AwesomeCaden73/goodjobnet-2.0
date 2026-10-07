@@ -1,3 +1,5 @@
+import useUnsavedChanges from '../components/useUnsavedChanges';
+import StateOptions from '../components/StateOptions';
 import { remainingReviewJobs } from '../hotJobReview';
 import JobTypePicker from '../components/JobTypePicker';
 import EntryJobTypes from '../components/EntryJobTypes';
@@ -22,6 +24,7 @@ const JOB_OPTIONS = [
 ];
 
 function HotJobsReview({ user }) {
+  const { formProps, markSaved, confirmDiscard } = useUnsavedChanges();
   const [jobs, setJobs] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -553,6 +556,7 @@ function HotJobsReview({ user }) {
   const currentJob = jobs[currentIndex];
 
   const handleNext = () => {
+    if (!confirmDiscard()) return;
     if (currentIndexRef.current < jobsRef.current.length - 1) {
       const nextIdx = currentIndexRef.current + 1;
       setCurrentIndex(nextIdx);
@@ -573,6 +577,7 @@ function HotJobsReview({ user }) {
   };
 
   const handlePrev = () => {
+    if (!confirmDiscard()) return;
     if (currentIndexRef.current > 0) {
       const prevIdx = currentIndexRef.current - 1;
       setCurrentIndex(prevIdx);
@@ -593,6 +598,7 @@ function HotJobsReview({ user }) {
   };
 
   const handleGoBack = () => {
+    if (!confirmDiscard()) return;
     setCategorySelected(false);
     setJobs([]);
     setCurrentIndex(0);
@@ -1313,6 +1319,7 @@ function HotJobsReview({ user }) {
       });
       const result = await response.json();
       if (result.success) {
+        markSaved();
         setSuccess(true);
         playChirp('success');
 
@@ -1591,7 +1598,7 @@ function HotJobsReview({ user }) {
           </button>
         </div>
 
-        <form ref={formRef} onSubmit={handleSubmit} key={`${currentJob.row_index}-${updateKey}`}>
+        <form {...formProps} ref={formRef} onSubmit={handleSubmit} key={`${currentJob.row_index}-${updateKey}`}>
           {(() => {
             const existingJobs = (currentJob.available_jobs || '').split(',').map(s => s.trim()).filter(Boolean);
             const matchedJobs = existingJobs.filter(j => JOB_OPTIONS.includes(j));
@@ -1600,8 +1607,8 @@ function HotJobsReview({ user }) {
             return (<>
               <fieldset className="entry-section"><legend>Company & location</legend><div className="form-grid">
                 <div className="input-group">
-                  <label>Company Name <span className="required">*</span></label>
-                  <input type="text" name="company_name" defaultValue={currentJob.company_name} required />
+                  <label htmlFor="review-company_name">Company Name <span className="required">*</span></label>
+                  <input id="review-company_name" type="text" name="company_name" defaultValue={currentJob.company_name} required />
                 </div>
 
                 <div className="input-group">
@@ -1639,27 +1646,19 @@ function HotJobsReview({ user }) {
 
                 <div className="input-group">
                   <label htmlFor="hotjobsreview-company_state">Company State</label>
-                  <select id="hotjobsreview-company_state" name="company_state" defaultValue={currentJob.company_state || 'FL'}>
-                    <option value="">Select State...</option>
-                    <option value="FL">Florida</option>
-                    <option value="AL">Alabama</option>
-                    <option value="GA">Georgia</option>
-                    <option value="TX">Texas</option>
-                    <option value="NY">New York</option>
-                    <option value="CA">California</option>
-                  </select>
+                  <select id="hotjobsreview-company_state" name="company_state" defaultValue={currentJob.company_state || 'FL'}><StateOptions /></select>
                 </div>
 
                 <div className="input-group">
                   <label htmlFor="hotjobsreview-company_zip">Company Zipcode</label>
-                  <input id="hotjobsreview-company_zip" type="text" name="company_zip" defaultValue={currentJob.company_zip} />
+                  <input id="hotjobsreview-company_zip" type="text" name="company_zip" inputMode="numeric" pattern="[0-9]{5}(-[0-9]{4})?" title="Enter a five-digit ZIP code or ZIP+4." defaultValue={currentJob.company_zip} />
                 </div>
 
               </div></fieldset><fieldset className="entry-section"><legend>Hiring contact</legend><div className="form-grid">
                 <div className="input-group full-width">
-                  <label>Career Website URL</label>
+                  <label htmlFor="review-career_website">Career Website URL</label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input type="text" name="career_website" defaultValue={currentJob.career_website} style={{ flex: 1 }} />
+                    <input id="review-career_website" type="text" name="career_website" defaultValue={currentJob.career_website} style={{ flex: 1 }} />
                     {currentJob.career_website && (
                       <a href={currentJob.career_website.startsWith('http') ? currentJob.career_website : `https://${currentJob.career_website}`} target="_blank" rel="noopener noreferrer" className="btn secondary-btn" style={{ width: 'auto', padding: '0.8rem 1rem' }}>
                         Open Link
@@ -1669,8 +1668,8 @@ function HotJobsReview({ user }) {
                 </div>
 
                 <div className="input-group">
-                  <label>Hiring Contact Name</label>
-                  <input type="text" name="contact_name" defaultValue={currentJob.contact_name} />
+                  <label htmlFor="review-contact_name">Hiring Contact Name</label>
+                  <input id="review-contact_name" type="text" name="contact_name" defaultValue={currentJob.contact_name} />
                 </div>
 
                 <div className="input-group">
@@ -1704,7 +1703,7 @@ function HotJobsReview({ user }) {
 
                 <div className="input-group full-width">
                   <EntryJobTypes name="available_jobs_select" initial={matchedJobs} label="Available job types" />
-                  <input type="text" name="available_jobs_manual" defaultValue={unmatchedJobs.join(', ')} placeholder="Other available jobs (comma separated)" style={{ marginTop: '0.5rem' }} />
+                  <label htmlFor="manual-jobs" style={{ display: 'block', marginTop: '1rem' }}>Other available jobs</label><input id="manual-jobs" type="text" name="available_jobs_manual" defaultValue={unmatchedJobs.join(', ')} placeholder="Other available jobs (comma separated)" style={{ marginTop: '0.5rem' }} />
                 </div>
 
                 <div className="input-group full-width">
@@ -1716,7 +1715,7 @@ function HotJobsReview({ user }) {
           })()}
 
           {message && (
-            <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? 'var(--success)' : 'var(--error)' }}>
+            <div role={success ? "status" : "alert"} style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? 'var(--success)' : 'var(--error)' }}>
               {message}
             </div>
           )}

@@ -53,6 +53,15 @@ try {
   assert(!picker.includes('name="job_type"'), 'Entry picker added an API field');
   assert(render('/search').includes('People'), 'Signed-in universal search is missing people');
   assert(!render('/apps').includes('Page not found'), 'App catalog has an incorrect breadcrumb');
+  for (const path of ['/map', '/assigned-job-seekers']) assert(!render(path).includes('Page not found'), 'Valid page has an incorrect breadcrumb: ' + path);
+  const { JobGroups } = await server.ssrLoadModule('/src/components/SearchCards.jsx');
+  const manyJobs = Array.from({ length: 60 }, (_, index) => ({ company: `Example ${index}`, role: 'Retail', date_verified: '2026-10-06' }));
+  const jobGroups = renderToString(React.createElement(JobGroups, { results: { recent: manyJobs, older: [] }, onSelect() {} }));
+  assert.equal((jobGroups.match(/aria-label="View job:/g) || []).length, 25, 'Large result sets must render a bounded initial list');
+  assert(jobGroups.replace(/<!--.*?-->/g, '').includes('Show more currently hiring opportunities'), 'Remaining results must stay reachable');
+  const entry = render('/job-entry');
+  assert(entry.includes('value="WA"') && entry.includes('value="DC"'), 'State choices are incomplete');
+  assert(entry.includes('for="manual-jobs"'), 'Manual job types have no accessible label');
   assert(render('/search?q=Retail').includes('value="Retail"'), 'Header search lost the URL query');
   assert(render('/job-entry').includes('for="jobentry-company_name"'), 'Entry labels are not associated with controls');
   values.set('goodjobnet_user', '{broken-json');

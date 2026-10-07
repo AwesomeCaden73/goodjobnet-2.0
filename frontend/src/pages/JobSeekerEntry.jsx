@@ -1,3 +1,4 @@
+import useUnsavedChanges from '../components/useUnsavedChanges';
 import EntryJobTypes from '../components/EntryJobTypes';
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
@@ -18,6 +19,8 @@ const standardOptions = [
 ];
 
 function JobSeekerEntry({ user }) {
+  const { formProps, markSaved, confirmDiscard } = useUnsavedChanges();
+  const [formKey, setFormKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [success, setSuccess] = useState(false);
@@ -100,8 +103,9 @@ function JobSeekerEntry({ user }) {
       });
       const result = await response.json();
       if (result.success) {
+        markSaved();
         setSuccess(true);
-        setMessage((fromSearch || fromAssigned) ? 'Job Seeker successfully updated!' : 'Job Seeker successfully added!');
+        setMessage((fromSearch || fromAssigned) ? 'Job Seeker successfully updated!' : 'Job seeker submitted for review. It will appear in search after the employment center reviews it.');
         
         if (fromSearch) {
           // Update the sessionStorage cache so the report has the updated seeker data
@@ -143,14 +147,16 @@ function JobSeekerEntry({ user }) {
           } catch (cacheErr) {
             console.error('Failed to update search results cache:', cacheErr);
           }
-        } else {
+        } else if (!seeker) {
+          setSelectedJobTypes([]);
+          setFormKey(key => key + 1);
           e.target.reset();
         }
       } else {
         setSuccess(false);
         setMessage(result.error || 'Failed to submit');
       }
-    } catch (err) {
+    } catch {
       setSuccess(false);
       setMessage('Error connecting to server.');
     }
@@ -165,7 +171,7 @@ function JobSeekerEntry({ user }) {
           <p className="subtitle">{seeker ? 'Review contact information, employment interests, and matching jobs.' : 'Enter information for an individual seeking employment'}</p>
         </header>
 
-        <form onSubmit={handleSubmit}>
+        <form {...formProps} key={formKey} onSubmit={handleSubmit}>
           <fieldset className="entry-section"><legend>Contact & community</legend><p>How can we reach this person?</p><div className="form-grid">
             <div className="input-group full-width">
               <label htmlFor="jobseekerentry-name">Name of Job Seeker <span className="required">*</span></label>
@@ -184,7 +190,7 @@ function JobSeekerEntry({ user }) {
 
             <div className="input-group">
               <label htmlFor="jobseekerentry-zipcode">Zipcode</label>
-              <input id="jobseekerentry-zipcode" type="text" name="zipcode" defaultValue={seeker?.zipcode || ''} />
+              <input id="jobseekerentry-zipcode" type="text" name="zipcode" inputMode="numeric" pattern="[0-9]{5}(-[0-9]{4})?" title="Enter a five-digit ZIP code or ZIP+4." defaultValue={seeker?.zipcode || ''} />
             </div>
 
             <div className="input-group">
@@ -214,7 +220,7 @@ function JobSeekerEntry({ user }) {
             </div>
 
             <div className="input-group full-width">
-              <label htmlFor="jobseekerentry-job_needed">Desired Company Type for employer</label>
+              <label htmlFor="jobseekerentry-job_needed">Preferred employer industry</label>
               <select id="jobseekerentry-job_needed" name="job_needed" defaultValue={seeker?.job_needed || ''}>
                 <option value="">Select Type...</option>
                 <option value="Construction">Construction</option>
@@ -265,7 +271,7 @@ function JobSeekerEntry({ user }) {
           </div></fieldset>
 
           {message && (
-            <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? 'var(--success)' : 'var(--error)' }}>
+            <div role={success ? "status" : "alert"} style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? 'var(--success)' : 'var(--error)' }}>
               {message}
             </div>
           )}
@@ -275,6 +281,7 @@ function JobSeekerEntry({ user }) {
               type="button" 
               className="btn secondary-btn" 
               onClick={() => {
+                if (!confirmDiscard()) return;
                 if (location.state?.fromUniversal) {
                   navigate(location.state.fromUniversal);
                 } else if (fromAssigned) {
@@ -340,7 +347,7 @@ function JobSeekerEntry({ user }) {
                             </td>
                             <td>{job.role}</td>
                             <td>{job.location}</td>
-                            <td>{job.distance || 'N/A'}</td>
+                            <td>{job.distance ?? 'N/A'}</td>
                             <td>
                               {job.career_website ? (
                                 <a href={job.career_website} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: '500' }}>
@@ -386,7 +393,7 @@ function JobSeekerEntry({ user }) {
                             </td>
                             <td>{job.role}</td>
                             <td>{job.location}</td>
-                            <td>{job.distance || 'N/A'}</td>
+                            <td>{job.distance ?? 'N/A'}</td>
                             <td>
                               {job.career_website ? (
                                 <a href={job.career_website} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: '500' }}>

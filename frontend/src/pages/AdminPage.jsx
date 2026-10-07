@@ -1,9 +1,13 @@
 import { useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FaShieldAlt, FaUser, FaBriefcase, FaUserTie, FaSync, FaFileUpload, FaCloudDownloadAlt, FaExternalLinkAlt } from 'react-icons/fa';
 
 function AdminPage({ user }) {
   const navigate = useNavigate();
+  const importInput = useRef(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(false);
+  const [statsAttempt, setStatsAttempt] = useState(0);
 
   const [stats, setStats] = useState({
     new_jobs_url: '#',
@@ -22,8 +26,9 @@ function AdminPage({ user }) {
 
   useEffect(() => {
     fetch('/api/dashboard-stats')
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error('Unavailable'); return res.json(); })
       .then(data => {
+        if (!data.success) throw new Error('Unavailable');
         if (data.success) {
           setStats({
             new_jobs_url: data.new_jobs_url || '#',
@@ -32,9 +37,10 @@ function AdminPage({ user }) {
         }
       })
       .catch(err => {
+        setStatsError(true);
         console.error('Error fetching dashboard stats for admin page:', err);
-      });
-  }, []);
+      }).finally(() => setStatsLoading(false));
+  }, [statsAttempt]);
 
   const handleUpdateJobSeekerInfo = () => {
     setUpdating(true);
@@ -201,36 +207,9 @@ function AdminPage({ user }) {
 
         {/* Admin Tools Navigation Grid (Icons) */}
         <h2 style={{ fontSize: '1.2rem', color: 'var(--text-dark)', marginBottom: '1rem' }}>Admin Tools & Actions</h2>
+        {statsError && <p role="alert">Review links could not be loaded. <button type="button" className="text-link" onClick={() => { setStatsLoading(true); setStatsError(false); setStatsAttempt(value => value + 1); }}>Try again</button></p>}
         <div className="nav-grid mb-2">
-          {/* Card 1: Review New Job Opportunities */}
-          <a
-            href={stats.new_jobs_url || '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="nav-card"
-            style={{ opacity: stats.new_jobs_url && stats.new_jobs_url !== '#' ? 1 : 0.6 }}
-          >
-            <FaBriefcase />
-            <h3>Review New Job Opportunities</h3>
-          </a>
-
-          {/* Card 2: Review New Job Seekers */}
-          {stats.new_seekers_url && stats.new_seekers_url !== '#' ? (
-            <a
-              href={stats.new_seekers_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="nav-card"
-            >
-              <FaUserTie />
-              <h3>Review New Job Seekers</h3>
-            </a>
-          ) : (
-            <div className="nav-card" style={{ opacity: 0.6, cursor: 'not-allowed' }}>
-              <FaUserTie />
-              <h3>Review New Job Seekers</h3>
-            </div>
-          )}
+          {[[stats.new_jobs_url, 'Review New Job Opportunities', FaBriefcase], [stats.new_seekers_url, 'Review New Job Seekers', FaUserTie]].map(([url, title, Icon]) => url && url !== '#' ? <a key={title} href={url} target="_blank" rel="noopener noreferrer" className="nav-card"><Icon /><h3>{title}</h3><span>Open review spreadsheet (new tab)</span></a> : <button key={title} type="button" className="nav-card" disabled><Icon /><h3>{title}</h3><span>{statsLoading ? 'Loading...' : 'Review link unavailable'}</span></button>)}
 
           {/* Card 3: Update jobBank jobSeeker information */}
           <button
@@ -244,21 +223,8 @@ function AdminPage({ user }) {
             <h3>{updating ? 'Updating jobBank info...' : 'Update jobBank jobSeeker information'}</h3>
           </button>
 
-          {/* Card 4: Import current Job Seeker List */}
-          <label
-            className="nav-card"
-            style={{ opacity: importing ? 0.7 : 1, margin: 0 }}
-          >
-            <FaFileUpload />
-            <h3>{importing ? 'Importing Job Seeker List...' : 'Import current Job Seeker List'}</h3>
-            <input
-              type="file"
-              accept=".xlsx"
-              onChange={handleImportJobSeekers}
-              disabled={importing}
-              style={{ display: 'none' }}
-            />
-          </label>
+          <button type="button" className="nav-card" disabled={importing} onClick={() => importInput.current.click()}><FaFileUpload /><h3>{importing ? 'Importing Job Seeker List...' : 'Import current Job Seeker List'}</h3><span>Choose an Excel file (.xlsx)</span></button>
+          <input ref={importInput} type="file" accept=".xlsx" onChange={handleImportJobSeekers} disabled={importing} hidden aria-label="Import current Job Seeker List" />
 
           {/* Card 5: Export Jobs from JSearch */}
           <button

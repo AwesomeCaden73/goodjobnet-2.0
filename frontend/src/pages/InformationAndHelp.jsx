@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 function InformationAndHelp() {
   return (
     <div className="help-container fade-in">
@@ -7,24 +8,24 @@ function InformationAndHelp() {
         <div className="help-section">
           <h2>About the Job Bank</h2>
           <p>
-            Jobs opportunities provided on this website are primarily <strong>low or minimum wage</strong>. These jobs are tailored for individuals that need <strong>immediate employment</strong>. Higher paying jobs and establishing a stable career typically takes time and is an area where our Employment Center coaches can provide assistance.
+            Job opportunities provided on this website are primarily <strong>low or minimum wage</strong>. These jobs are tailored for individuals that need <strong>immediate employment</strong>. Higher paying jobs and establishing a stable career typically takes time and is an area where our Employment Center coaches can provide assistance.
           </p>
         </div>
 
         <div className="help-section">
           <h2>User Options</h2>
           <ul>
-            <li>Job Location Map: This is a map showing the locations of the jobs that are posted in the Screened Job Opportunities list.</li>
-            <li>Search for nearby jobs: This is a search engine for jobs that are within a certain radius of an address that is provided by the user.</li>
-            <li>Job Seeker Entry: This is a form for entering general information for individuals that are seeking employment. This information is then reviewed by the Orlando Employment Center so they can provide assistance.</li>
-            <li>Job Opportunity Entry: This is a form for entering employment opportunities that can be be made available through the Orlando Employment Center for others who are seeking employment.</li>
+            <li><Link to="/map">Job map</Link>: Explore employer locations across Central Florida.</li>
+            <li><Link to="/hot-job-search">Jobs</Link>: Search by company or job type. Include a five-digit ZIP code to find nearby opportunities.</li>
+            <li>Job seeker entry: This is a form for entering general information for individuals that are seeking employment. This information is then reviewed by the Orlando Employment Center so they can provide assistance.</li>
+            <li>Job opportunity entry: This is a form for entering employment opportunities that can be made available through the Orlando Employment Center for others who are seeking employment.</li>
           </ul>
         </div>
 
         <div className="help-section">
           <h2>Employment Seeker Assistance</h2>
           <p>
-            The Employment Center will review all <strong>Employment Seeker entries</strong> and will attempt to reach out and assist as much as possible. We are dedicated to supporting you as you help others find success their journey to employment.
+            The Employment Center will review all <strong>Employment Seeker entries</strong> and will attempt to reach out and assist as much as possible. We are dedicated to supporting you as you help others find success in their journey to employment.
           </p>
         </div>
 

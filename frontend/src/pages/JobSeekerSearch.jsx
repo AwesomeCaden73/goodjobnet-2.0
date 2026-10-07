@@ -98,8 +98,8 @@ function JobSeekerSearch() {
       zip_only: searchParams.zip_only === true
     };
     const zip = enteredZip(inputs.address);
-    if (inputs.zip_only && !zip) {
-      setError('Enter a five-digit ZIP code in Location to use ZIP-only search.');
+    if ((inputs.zip_only || inputs.address.trim()) && !zip) {
+      setError('Enter a five-digit ZIP code in Location, or leave Location blank to browse.');
       setLoading(false);
       formRef.current.elements.address.focus();
       return;
@@ -232,7 +232,7 @@ function JobSeekerSearch() {
     <section className="surface combined-job-filter"><form ref={formRef} onSubmit={handleSearch} aria-label="Job seeker search filters">
       <div className="job-search-primary">
         <div className="input-group"><label htmlFor="jobseekersearch-name">Name</label><div className="search-field-icon"><Users size={18} /><input id="jobseekersearch-name" name="name" placeholder="Any name" value={savedInputs.name || ''} onChange={updateInput('name')} aria-describedby="seeker-name-hint" /></div></div>
-        <div className="input-group"><label htmlFor="jobseekersearch-address">Location</label><div className="search-field-icon"><MapPin size={18} /><input id="jobseekersearch-address" name="address" placeholder="City or address with ZIP code" value={savedInputs.address || ''} onChange={updateInput('address')} aria-describedby="seeker-location-hint" /></div></div>
+        <div className="input-group"><label htmlFor="jobseekersearch-address">Location</label><div className="search-field-icon"><MapPin size={18} /><input id="jobseekersearch-address" name="address" placeholder="ZIP code or address including ZIP" value={savedInputs.address || ''} onChange={updateInput('address')} aria-describedby="seeker-location-hint" /></div></div>
         <div className="input-group"><label htmlFor="jobseekersearch-radius">Radius (miles)</label><input id="jobseekersearch-radius" name="radius" type="number" value={savedInputs.radius || ''} onChange={updateInput('radius')} min="1" disabled={savedInputs.zip_only === true} required={!savedInputs.zip_only} /></div>
       </div>
       <div className="zip-filter-row"><ZipOnlyToggle id="seeker-zip-only" checked={savedInputs.zip_only === true} onChange={checked => setSavedInputs(previous => ({ ...previous, zip_only: checked }))} /><span className="muted">Match the entered ZIP exactly instead of using a radius.</span></div>
@@ -243,7 +243,7 @@ function JobSeekerSearch() {
     {loading && <p className="search-loading" role="status">Searching job seekers...</p>}
     {!loading && results && <section ref={resultsRef} tabIndex={-1} className="job-search-results" aria-labelledby="seeker-results-heading">
       <div className="section-heading"><div><h2 id="seeker-results-heading">Search results <span className="result-count">{count}</span></h2><p>{searchContext?.zip_only ? 'Showing people in ZIP ' + enteredZip(searchContext.address) + ' only.' : 'Select a person to view their profile and edit details.'}</p></div><button type="button" className="text-link" onClick={() => { formRef.current.scrollIntoView({ behavior: 'auto', block: 'center' }); formRef.current.elements.name.focus({ preventScroll: true }); }}>Adjust filters</button></div>
-      {count ? [['nearby', searchContext?.name && !searchContext?.address ? 'Name matches' : 'Job seekers within radius'], ['other', 'Other matching job seekers']].map(([key, title]) => <section className="result-section" key={key}><h2>{title} <span className="muted">{results[key]?.length || 0}</span></h2>{key === 'other' && <p>Outside the search radius or without a location.</p>}{results[key]?.length ? <div className="search-result-list">{results[key].map((person, i) => <PersonCard key={person.row_index ?? i} person={person} onSelect={setSelection} />)}</div> : <p className="empty-state">No job seekers in this group match your search.</p>}</section>) : <div className="empty-state search-start"><Search size={28} /><h3>No people match these filters</h3><p>Try another name, a broader job type, or a larger radius.</p></div>}
+      {count ? [['nearby', searchContext?.name && !searchContext?.address ? 'Name matches' : 'Job seekers within radius'], ['other', 'Other matching job seekers']].filter(([key]) => results[key]?.length).map(([key, title]) => <section className="result-section" key={key}><h2>{title} <span className="muted">{results[key]?.length || 0}</span></h2>{key === 'other' && <p>Outside the search radius or without a location.</p>}{results[key]?.length ? <div className="search-result-list">{results[key].map((person, i) => <PersonCard key={person.row_index ?? i} person={person} onSelect={setSelection} />)}</div> : <p className="empty-state">No job seekers in this group match your search.</p>}</section>) : <div className="empty-state search-start"><Search size={28} /><h3>No people match these filters</h3><p>{searchContext?.zip_only ? 'Try another name or job type, or turn off ZIP-only search.' : 'Try another name, a broader job type, or a larger radius.'}</p></div>}
       {selectedSeeker && <section className="matching-jobs-section"><h2>Matching Jobs for {selectedSeeker.name}</h2><p>Based on desired job types: {selectedSeeker.job_types || selectedSeeker.desired_job_types}</p>{matchingJobsLoading ? <p role="status">Loading matching jobs...</p> : <JobGroups results={matchingJobs} onSelect={setSelection} />}</section>}
     </section>}
     {!loading && !results && <div className="empty-state search-start"><Search size={28} /><h2>Find the people you can help</h2><p>Search by name, or combine job interests and a nearby ZIP code. Leave filters blank to browse.</p></div>}
