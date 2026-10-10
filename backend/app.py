@@ -36,6 +36,7 @@ SPREADSHEET_NAME_SEEKERS = 'GoodJobNet_JobSeekers' # Name of new sheet to create
 WORKSHEET_NAME_SEEKERS = 'Sheet1'
 SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT = '1khmTUewP3EJremrR388R4-rjLZ8ej0RcnGyCfLFYpuY'
 SPREADSHEET_ID_PHONE_VERIFICATION = '1aUTms82Rgci168ATaD7XcyU1SFUjjnq4HxamxRJtFQw'
+SPREADSHEET_ID_HOT_JOBS_MAP = '1IlSEHWOyN7fr0osR4IMEyhc-UvxGCI7bUtbTbCRUBlY'
 
 
 _gsheets_client = None
@@ -3635,6 +3636,104 @@ def sync_jobseekers_csv_to_drive():
     except Exception as e:
         print(traceback.format_exc())
         return jsonify({"success": False, "error": "Error syncing JobSeeker CSV to Google Drive", "details": str(e)}), 500
+    finally:
+        garbage_collector.collect()
+
+
+@app.route('/api/update-hot-jobs-map', methods=['POST'])
+def update_hot_jobs_map():
+    try:
+        gc = get_gsheets_client()
+
+        # 1. Fetch JobBank jobs
+        try:
+            sh_jb = gc.open_by_key(SPREADSHEET_ID_MASTER_JOBBANK)
+        except Exception:
+            sh_jb = gc.open_by_key(SPREADSHEET_ID_JOBS)
+
+        try:
+            wks_jb = sh_jb.worksheet_by_title("Destinations")
+        except Exception:
+            wks_jb = sh_jb.sheet1
+
+        jb_values = wks_jb.get_all_values(include_tailing_empty_rows=False, include_tailing_empty=False)
+        if not jb_values or len(jb_values) < 1:
+            return jsonify({"success": False, "error": "JobBank spreadsheet is empty."}), 400
+
+        jb_headers = jb_values[0]
+
+        # 2. Open HotJobsMapFile
+        sh_map = gc.open_by_key(SPREADSHEET_ID_HOT_JOBS_MAP)
+        wks_map = sh_map.sheet1
+
+        map_headers = wks_map.get_row(1)
+        while map_headers and not str(map_headers[-1]).strip():
+            map_headers.pop()
+
+        if not map_headers:
+            map_headers = [
+                'Name', 'Address', 'City', 'State', 'Zip',
+                'Hiring Contact', 'Hiring Contact Phone', 'Hiring Contact email',
+                'Currently Hiring', 'Available Jobs', 'Company Type / Industry',
+                'Career Page', 'General Notes',
+                'Number of Job Seekers looking for this type of employment',
+                'Date last verified', 'Validated/Entered By (Name)',
+                'Requries Action', 'Full Address (do not enter this manually)'
+            ]
+
+        # 3. Filter jobs validated in the last 3 weeks and Currently Hiring = TRUE
+        now = datetime.datetime.now()
+        three_weeks_ago = now - datetime.timedelta(days=21)
+
+        matched_rows = []
+        for row in jb_values[1:]:
+            row_dict = dict(zip(jb_headers, row))
+            company_name = str(get_row_field(row_dict, 'company_name')).strip()
+            if not company_name:
+                continue
+
+            is_hiring_val = str(get_row_field(row_dict, 'currently_hiring', 'TRUE')).strip().upper()
+            if is_hiring_val not in ['TRUE', 'YES', '1', 'Y']:
+                continue
+
+            date_str = str(get_row_field(row_dict, 'date_verified')).strip()
+            if not date_str:
+                continue
+            date_obj = parse_date_string(date_str)
+            if not date_obj or date_obj < three_weeks_ago:
+                continue
+
+            # Build map row formatted according to map_headers
+            map_row = []
+            for h in map_headers:
+                val = str(row_dict.get(h, '')).strip()
+                if h == 'Full Address (do not enter this manually)' and not val:
+                    street = str(row_dict.get('Address', '')).strip()
+                    city = str(row_dict.get('City', '')).strip()
+                    zip_val = str(row_dict.get('Zip', '')).strip()
+                    if street or city or zip_val:
+                        val = f"{street}, {city} {zip_val}".strip(", ")
+                map_row.append(val)
+            matched_rows.append(map_row)
+
+        # 4. Update HotJobsMapFile worksheet
+        needed_rows = len(matched_rows) + 5
+        if needed_rows > wks_map.rows:
+            wks_map.add_rows(needed_rows - wks_map.rows)
+
+        wks_map.clear(start='A2')
+        if matched_rows:
+            wks_map.update_values(crange='A2', values=matched_rows)
+
+        return jsonify({
+            "success": True,
+            "message": f"Successfully updated HotJobsMapFile with {len(matched_rows)} validated hot jobs from the last three weeks!",
+            "count": len(matched_rows),
+            "url": sh_map.url
+        })
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": "Error updating HotJobsMapFile", "details": str(e)}), 500
     finally:
         garbage_collector.collect()
 
