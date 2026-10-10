@@ -193,6 +193,7 @@ function EmploymentCenterDashboard({ user }) {
             {renderPieChart(stats.seeker_types, stats.total_job_seekers, sharedColorMap, "No job seekers currently active")}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem', alignItems: 'center' }}>
               <Link to="/assigned-job-seekers" className="btn primary-btn" style={{ width: 'auto', background: '#8e44ad' }}>Show my assigned Job Seekers list</Link>
+              <Link to="/hot-jobs-review?category=my_assigned_seekers" className="btn secondary-btn" style={{ width: 'auto', borderColor: '#8e44ad', color: '#8e44ad' }}>Verify Jobs for My Assigned Seekers</Link>
             </div>
           </div>
         </div>
@@ -215,7 +216,7 @@ function EmploymentCenterDashboard({ user }) {
             </li>
             <li style={{ padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
               <Link to="/hot-jobs-review?category=unverified_no_career" className="dashboard-alert-link">
-                <span>Hot Jobs unverified &gt; 3 years (Phone Verification Required):</span>
+                <span>Phone Verification Queue (unverified &gt; 3 months):</span>
                 <strong>{stats.unverified_no_career_count}</strong>
               </Link>
             </li>

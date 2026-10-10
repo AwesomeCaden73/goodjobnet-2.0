@@ -29,11 +29,13 @@ if not os.path.exists(SERVICE_ACCOUNT_FILE):
     # Fallback to current directory if not found
     SERVICE_ACCOUNT_FILE = os.path.join(os.path.dirname(__file__), 'credentials.json')
 
+SPREADSHEET_ID_MASTER_JOBBANK = '1NxDQTta3xvch5jn_j-DpWvGg0zRfJhpGnLv9rFQxw6I'
 SPREADSHEET_ID_JOBS = '1YIGS6DRmnEH3be9TG59nFVhGee2DVcc4MaaXFhKgSic'
 WORKSHEET_NAME_JOBS = 'Sheet1'
 SPREADSHEET_NAME_SEEKERS = 'GoodJobNet_JobSeekers' # Name of new sheet to create
 WORKSHEET_NAME_SEEKERS = 'Sheet1'
 SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT = '1khmTUewP3EJremrR388R4-rjLZ8ej0RcnGyCfLFYpuY'
+SPREADSHEET_ID_PHONE_VERIFICATION = '1aUTms82Rgci168ATaD7XcyU1SFUjjnq4HxamxRJtFQw'
 
 
 _gsheets_client = None
@@ -126,6 +128,65 @@ def calculate_distance(lat1, lon1, lat2, lon2):
         return R * c
     except (ValueError, TypeError, ZeroDivisionError):
         return float('inf')
+
+
+FL_CITY_ZIPS = {
+    "orlando": "32801",
+    "kissimmee": "34741",
+    "kissmmee": "34741",
+    "davenport": "33837",
+    "st cloud": "34769",
+    "st. cloud": "34769",
+    "saint cloud": "34769",
+    "leesburg": "34748",
+    "haines city": "33844",
+    "belle isle": "32809",
+    "windermere": "34786",
+    "winter garden": "34787",
+    "wintergarden": "34787",
+    "winter park": "32789",
+    "oviedo": "32765",
+    "longwood": "32750",
+    "altamonte springs": "32701",
+    "alt spring": "32701",
+    "altamonte": "32701",
+    "ocoee": "34761",
+    "lake hamilton": "33851",
+    "miami": "33101",
+    "coral springs": "33065",
+    "palm bay": "32905",
+    "live oak": "32064",
+    "williamsburg": "32821",
+    "apopka": "32703",
+    "sanford": "32771",
+    "clermont": "34711",
+    "deltona": "32725",
+    "daytona beach": "32114",
+    "lakeland": "33801",
+    "tampa": "33602",
+    "deland": "32720",
+    "poinciana": "34759",
+    "groveland": "34736",
+    "minneola": "34715",
+    "mount dora": "32757",
+    "tavares": "32778",
+    "eustis": "32726",
+    "casselberry": "32707",
+    "maitland": "32751",
+    "lake mary": "32746"
+}
+
+def resolve_zip(zip_val, city_val=""):
+    """Returns a valid 5-digit zip code if present, otherwise falls back to a representative zip for known cities."""
+    clean_zip = str(zip_val or "").strip()
+    if clean_zip.endswith(".0"):
+        clean_zip = clean_zip[:-2]
+    clean_zip = clean_zip[:5]
+    if clean_zip.isdigit() and len(clean_zip) == 5:
+        return clean_zip
+    clean_city = str(city_val or "").strip().lower()
+    return FL_CITY_ZIPS.get(clean_city, "")
+
 
 # Helper functions for loose job type matching
 def clean_and_tokenize(s):
@@ -273,7 +334,7 @@ def get_master_jobs_records():
     def fetch_master_jobs():
         gc = get_gsheets_client()
         try:
-            sh = gc.open_by_key("1NxDQTta3xvch5jn_j-DpWvGg0zRfJhpGnLv9rFQxw6I")
+            sh = gc.open_by_key(SPREADSHEET_ID_MASTER_JOBBANK)
         except Exception:
             sh = gc.open_by_key(SPREADSHEET_ID_JOBS)
         try:
@@ -282,6 +343,14 @@ def get_master_jobs_records():
             wks = sh.sheet1
         return wks.get_all_records()
     return get_cached_data('master_jobs_records', fetch_master_jobs)
+
+def get_phone_verification_records():
+    def fetch_phone_verification():
+        gc = get_gsheets_client()
+        sh = gc.open_by_key(SPREADSHEET_ID_PHONE_VERIFICATION)
+        wks = sh.sheet1
+        return wks.get_all_records()
+    return get_cached_data('phone_verification_records', fetch_phone_verification)
 
 def get_new_jobs_records():
     def fetch_new_jobs():
@@ -326,11 +395,20 @@ def get_row_field(row, field_name, default=""):
         "career_website": ["Career Page", "Company Career Website", "Career Website", "Website"],
         "contact_name": ["Hiring Contact", "Hiring Contact Name", "Contact Name", "Contact", "Hiring Contract Name", "contact_name"],
         "contact_phone": ["Hiring Contact Phone", "Contact Phone", "Phone", "contact_phone"],
-        "contact_email": ["Hiring Contact Email", "Contact Email", "Email Address", "contact_email"],
-        "available_jobs": ["Availible Jobs", "Available Jobs", "Job Title", "available_jobs"],
+        "contact_email": ["Hiring Contact email", "Hiring Contact Email", "Contact Email", "Email Address", "contact_email", "email"],
+        "available_jobs": ["Available Jobs", "Availible Jobs", "Job Title", "available_jobs"],
         "notes": ["General Notes", "Any additional Notes", "Notes", "notes"],
         "currently_hiring": ["Currently Hiring", "TRUE ", "currently_hiring"],
-        "date_verified": ["Date data verified", "Date last verified", "Date Entered", "Last Date Contacted", "Date"]
+        "date_verified": ["Date last verified", "Date data verified", "Date Entered", "Last Date Contacted", "Date"],
+        "seekers_looking": [
+            "Number of Job Seekers looking for this type of employment",
+            "Number of Job Seekers",
+            "Job Seekers",
+            "Interested Seekers",
+            "Seekers looking",
+            "seekers_looking",
+            "Seekers"
+        ]
     }
     
     possible_keys = field_mapping.get(field_name, [field_name])
@@ -712,11 +790,25 @@ def dashboard_stats():
                             break
                     job_type_counts[matched_type] = job_type_counts.get(matched_type, 0) + 1
                 
-            if age_days > 1095:
+        # 1b. Get stats from Phone_Verification_List for Phone Verification Queue
+        try:
+            phone_records = get_phone_verification_records()
+            for row in phone_records:
+                company = get_row_field(row, "company_name")
+                if not str(company).strip():
+                    continue
                 career_page = get_row_field(row, "career_website")
-                if not str(career_page).strip():
-                    unverified_no_career_count += 1
-                
+                if str(career_page).strip():
+                    continue
+                date_str = str(get_row_field(row, "date_verified")).strip()
+                if date_str:
+                    date_obj = parse_date_string(date_str)
+                    if date_obj and (now - date_obj).days <= 90:
+                        continue
+                unverified_no_career_count += 1
+        except Exception as e:
+            print(f"Error fetching phone verification stats: {e}")
+
         # 2. Get stats from New Job Opportunities sheet
         new_jobs_info = get_new_jobs_records()
         new_jobs_count = len(new_jobs_info['records'])
@@ -779,30 +871,250 @@ def hot_jobs_review():
     job_type = request.args.get("type", "").lower()
 
     try:
-        all_records = get_master_jobs_records()
-        
         now = datetime.datetime.now()
         jobs_to_review = []
-        
+
+        if category == "unverified_no_career":
+            all_records = get_phone_verification_records()
+            source = "phone_verification"
+
+            for idx, row in enumerate(all_records):
+                company_name_val = str(get_row_field(row, "company_name")).strip()
+                if not company_name_val:
+                    continue
+
+                career_page = str(get_row_field(row, "career_website")).strip()
+                if career_page:
+                    continue
+
+                date_str = str(get_row_field(row, "date_verified")).strip()
+                age_days = 9999
+                if date_str:
+                    date_obj = parse_date_string(date_str)
+                    if date_obj:
+                        age_days = (now - date_obj).days
+                        if age_days <= 90:
+                            continue
+
+                is_hiring_val = str(get_row_field(row, "currently_hiring", "TRUE")).strip().upper()
+
+                seekers_raw = str(get_row_field(row, "seekers_looking") or row.get("Number of Job Seekers looking for this type of employment") or "").strip()
+                try:
+                    seekers_count = float(seekers_raw)
+                except (ValueError, TypeError):
+                    seekers_count = 0.0
+
+                seekers_display = str(int(seekers_count)) if seekers_count == int(seekers_count) else str(seekers_count)
+
+                job = {
+                    "row_index": idx + 2,
+                    "source": source,
+                    "company_name": company_name_val,
+                    "company_type": row.get("Company Type") or row.get("Company Type / Industry") or "",
+                    "company_street": get_row_field(row, "company_street"),
+                    "company_city": get_row_field(row, "company_city"),
+                    "company_state": get_row_field(row, "company_state", "FL"),
+                    "company_zip": get_row_field(row, "company_zip"),
+                    "career_website": career_page,
+                    "contact_name": get_row_field(row, "contact_name"),
+                    "contact_phone": str(get_row_field(row, "contact_phone")),
+                    "contact_email": get_row_field(row, "contact_email"),
+                    "currently_hiring": "Yes" if is_hiring_val in ["TRUE", "YES", "1", "Y"] else "No",
+                    "available_jobs": get_row_field(row, "available_jobs"),
+                    "notes": get_row_field(row, "notes"),
+                    "date_last_verified": date_str,
+                    "age_days": age_days,
+                    "seekers_looking": seekers_display,
+                    "_seekers_sort": seekers_count
+                }
+                jobs_to_review.append(job)
+
+            # Sort descending by Number of Job Seekers looking for this type of employment
+            jobs_to_review.sort(key=lambda j: j["_seekers_sort"], reverse=True)
+            for j in jobs_to_review:
+                del j["_seekers_sort"]
+
+            return jsonify({"success": True, "jobs": jobs_to_review})
+
+        if category in ["my_assigned_seekers", "assigned_seekers"]:
+            coach = request.args.get("coach", "").strip()
+            if not coach:
+                return jsonify({"success": False, "error": "Coach name is required for assigned seekers verification."}), 400
+
+            seekers_records = get_seekers_records()
+            assigned_seekers = []
+            for seeker in seekers_records:
+                advisor_val = str(seeker.get("Employment Advisor", seeker.get("Employment Coach", ""))).strip()
+                if not advisor_val:
+                    continue
+                if matches_coach_loose(advisor_val, coach):
+                    desired_types = str(seeker.get("Desired Job Types", seeker.get("Type of Job Needed", seeker.get("Desired Types", "")))).strip()
+                    types_list = [t.strip() for t in desired_types.split(",") if t.strip()]
+                    if types_list:
+                        assigned_seekers.append({
+                            "name": seeker.get("Full Name", seeker.get(" Name", seeker.get("Name", "Unknown"))).strip(),
+                            "phone": str(seeker.get("Phone", seeker.get("Phone ", seeker.get("phone", "")))).strip(),
+                            "email": str(seeker.get("email") or seeker.get("Email") or seeker.get("Email Address", "")).strip(),
+                            "job_types": types_list,
+                            "desired_types_str": desired_types
+                        })
+
+            all_records = get_master_jobs_records()
+            source = "jobbank"
+
+            for idx, row in enumerate(all_records):
+                company_name_val = str(get_row_field(row, "company_name")).strip()
+                if not company_name_val:
+                    continue
+
+                available_jobs = str(get_row_field(row, "available_jobs")).strip()
+                if not available_jobs:
+                    continue
+
+                row_types = [j.strip() for j in available_jobs.split(",") if j.strip()]
+
+                matched_seekers = []
+                for s in assigned_seekers:
+                    if any(is_loose_match(st, rt) for st in s["job_types"] for rt in row_types):
+                        matched_seekers.append({
+                            "name": s["name"],
+                            "phone": s["phone"],
+                            "email": s["email"],
+                            "desired_jobs": s["desired_types_str"]
+                        })
+
+                if not matched_seekers:
+                    continue
+
+                career_page = get_row_field(row, "career_website")
+                is_hiring_val = str(get_row_field(row, "currently_hiring", "TRUE")).strip().upper()
+                date_str = str(get_row_field(row, "date_verified")).strip()
+                age_days = 9999
+                if date_str:
+                    date_obj = parse_date_string(date_str)
+                    if date_obj:
+                        age_days = (now - date_obj).days
+
+                total_seekers_raw = str(get_row_field(row, "seekers_looking") or row.get("Number of Job Seekers looking for this type of employment") or "0").strip()
+
+                job = {
+                    "row_index": idx + 2,
+                    "source": source,
+                    "company_name": company_name_val,
+                    "company_type": row.get("Company Type") or row.get("Company Type / Industry") or "",
+                    "company_street": get_row_field(row, "company_street"),
+                    "company_city": get_row_field(row, "company_city"),
+                    "company_state": get_row_field(row, "company_state", "FL"),
+                    "company_zip": get_row_field(row, "company_zip"),
+                    "career_website": career_page,
+                    "contact_name": get_row_field(row, "contact_name"),
+                    "contact_phone": str(get_row_field(row, "contact_phone")),
+                    "contact_email": get_row_field(row, "contact_email"),
+                    "currently_hiring": "Yes" if is_hiring_val in ["TRUE", "YES", "1", "Y"] else "No",
+                    "available_jobs": available_jobs,
+                    "notes": get_row_field(row, "notes"),
+                    "date_last_verified": date_str,
+                    "age_days": age_days,
+                    "seekers_looking": str(len(matched_seekers)),
+                    "my_assigned_count": len(matched_seekers),
+                    "my_assigned_seekers": matched_seekers,
+                    "total_seekers_looking": total_seekers_raw,
+                    "_seekers_sort": len(matched_seekers)
+                }
+                jobs_to_review.append(job)
+
+            # Sort descending by Number of My Assigned Job Seekers
+            jobs_to_review.sort(key=lambda j: j["_seekers_sort"], reverse=True)
+            for j in jobs_to_review:
+                del j["_seekers_sort"]
+
+            return jsonify({
+                "success": True,
+                "jobs": jobs_to_review,
+                "total_assigned_seekers": len(assigned_seekers)
+            })
+
+        if category in ["jobseekers", "job_seekers", "seekers", "5days"]:
+            all_records = get_master_jobs_records()
+            source = "jobbank"
+
+            for idx, row in enumerate(all_records):
+                company_name_val = str(get_row_field(row, "company_name")).strip()
+                if not company_name_val:
+                    continue
+
+                seekers_raw = str(row.get("Number of Job Seekers looking for this type of employment", "")).strip()
+                try:
+                    seekers_count = float(seekers_raw)
+                except (ValueError, TypeError):
+                    seekers_count = 0.0
+
+                if seekers_count <= 0:
+                    continue
+
+                career_page = get_row_field(row, "career_website")
+                is_hiring_val = str(get_row_field(row, "currently_hiring", "TRUE")).strip().upper()
+                date_str = str(get_row_field(row, "date_verified")).strip()
+                age_days = 9999
+                if date_str:
+                    date_obj = parse_date_string(date_str)
+                    if date_obj:
+                        age_days = (now - date_obj).days
+
+                seekers_display = str(int(seekers_count)) if seekers_count == int(seekers_count) else str(seekers_count)
+
+                job = {
+                    "row_index": idx + 2,
+                    "source": source,
+                    "company_name": company_name_val,
+                    "company_type": row.get("Company Type") or row.get("Company Type / Industry") or "",
+                    "company_street": get_row_field(row, "company_street"),
+                    "company_city": get_row_field(row, "company_city"),
+                    "company_state": get_row_field(row, "company_state", "FL"),
+                    "company_zip": get_row_field(row, "company_zip"),
+                    "career_website": career_page,
+                    "contact_name": get_row_field(row, "contact_name"),
+                    "contact_phone": str(get_row_field(row, "contact_phone")),
+                    "contact_email": get_row_field(row, "contact_email"),
+                    "currently_hiring": "Yes" if is_hiring_val in ["TRUE", "YES", "1", "Y"] else "No",
+                    "available_jobs": get_row_field(row, "available_jobs"),
+                    "notes": get_row_field(row, "notes"),
+                    "date_last_verified": date_str,
+                    "age_days": age_days,
+                    "seekers_looking": seekers_display,
+                    "_seekers_sort": seekers_count
+                }
+                jobs_to_review.append(job)
+
+            # Sort descending by Number of Job Seekers looking for this type of employment
+            jobs_to_review.sort(key=lambda j: j["_seekers_sort"], reverse=True)
+            for j in jobs_to_review:
+                del j["_seekers_sort"]
+
+            return jsonify({"success": True, "jobs": jobs_to_review})
+
+        # All other categories (type, company) use Master JobBank
+        all_records = get_master_jobs_records()
+        source = "jobbank"
+
         for idx, row in enumerate(all_records):
             company_name_val = str(get_row_field(row, "company_name")).strip()
             if not company_name_val:
                 continue
-            
+
             career_page = get_row_field(row, "career_website")
-            has_career_page = bool(str(career_page).strip())
             is_hiring_val = str(get_row_field(row, "currently_hiring", "TRUE")).strip().upper()
-            
+
             date_str = str(get_row_field(row, "date_verified")).strip()
             age_days = 0
             has_valid_date = False
-            
+
             if date_str:
                 date_obj = parse_date_string(date_str)
                 if date_obj:
                     age_days = (now - date_obj).days
                     has_valid_date = True
-            
+
             if category == "type":
                 row_type = str(get_row_field(row, "available_jobs")).lower()
                 job_types_list = [t.strip().lower() for t in job_type.split(",") if t.strip()]
@@ -814,7 +1126,7 @@ def hot_jobs_review():
                 if not company_query:
                     continue
                 row_company = company_name_val.lower()
-                
+
                 match = False
                 if company_query in row_company:
                     match = True
@@ -830,11 +1142,11 @@ def hot_jobs_review():
                             q_words_raw = [w for w in company_query.split() if w]
                             q_words_clean = ["".join(c for c in w if c.isalnum()) for w in q_words_raw]
                             q_words_clean = [w for w in q_words_clean if w]
-                            
+
                             t_words_raw = [w for w in row_company.split() if w]
                             t_words_clean = ["".join(c for c in w if c.isalnum()) for w in t_words_raw]
                             t_words_clean = [w for w in t_words_clean if w]
-                            
+
                             if q_words_clean:
                                 all_query_words_matched = True
                                 for qw in q_words_clean:
@@ -860,31 +1172,11 @@ def hot_jobs_review():
                 if not match:
                     continue
             else:
-                if not has_valid_date:
-                    if category == "unverified_no_career":
-                        age_days = 9999
-                    else:
-                        continue
-                
-                is_hiring_val = str(get_row_field(row, "currently_hiring", "TRUE")).strip().upper()
-                if category != "unverified_no_career" and is_hiring_val not in ["TRUE", "YES", "1", "Y"]:
-                    continue
-                    
-                career_page = get_row_field(row, "career_website")
-                has_career_page = bool(str(career_page).strip())
-                
-                if category == "5days":
-                    if not (16 <= age_days <= 21) or not has_career_page:
-                        continue
-                elif category == "46weeks":
-                    if not (28 <= age_days <= 42) or not has_career_page:
-                        continue
-                elif category == "unverified_no_career":
-                    if age_days <= 1095 or has_career_page:
-                        continue
+                continue
 
             job = {
                 "row_index": idx + 2,
+                "source": source,
                 "company_name": company_name_val,
                 "company_type": row.get("Company Type") or row.get("Company Type / Industry") or "",
                 "company_street": get_row_field(row, "company_street"),
@@ -903,7 +1195,7 @@ def hot_jobs_review():
                 "seekers_looking": str(row.get("Number of Job Seekers looking for this type of employment") or "0")
             }
             jobs_to_review.append(job)
-                    
+
         return jsonify({"success": True, "jobs": jobs_to_review})
     except Exception as e:
         print(traceback.format_exc())
@@ -916,55 +1208,61 @@ def update_hot_job():
     data = request.json
     if not data or not data.get("row_index"):
         return jsonify({"success": False, "error": "No data or row_index provided"}), 400
-        
+
     try:
         gc = get_gsheets_client()
-        try:
-            sh = gc.open_by_key("1NxDQTta3xvch5jn_j-DpWvGg0zRfJhpGnLv9rFQxw6I")
-        except Exception:
-            sh = gc.open_by_key(SPREADSHEET_ID_JOBS)
-            
-        try:
-            wks = sh.worksheet_by_title("Destinations")
-        except Exception:
+        source = data.get("source", "jobbank")
+
+        if source == "phone_verification":
+            sh = gc.open_by_key(SPREADSHEET_ID_PHONE_VERIFICATION)
             wks = sh.sheet1
+        else:
+            try:
+                sh = gc.open_by_key(SPREADSHEET_ID_MASTER_JOBBANK)
+            except Exception:
+                sh = gc.open_by_key(SPREADSHEET_ID_JOBS)
+            try:
+                wks = sh.worksheet_by_title("Destinations")
+            except Exception:
+                wks = sh.sheet1
+
         headers = wks.get_row(1)
-        row_index = data.get("row_index")
-        
+        row_index = int(data.get("row_index"))
+
         # Mapping frontend fields to spreadsheet headers
         field_mapping = {
             "company_name": ["Name", "Company Name"],
             "company_type": ["Company Type", "Company Type / Industry"],
-            "company_street": ["Address", "company_street"],
-            "company_city": ["County", "City", "company_city"],
+            "company_street": ["Address", "company_street", "Street"],
+            "company_city": ["City", "County", "company_city"],
             "company_state": ["State", "company_state"],
             "company_zip": ["Zip", "Zipcode", "Zip Code", "company_zip", "Zip code"],
             "career_website": ["Career Page", "Company Career Website", "Career Website", "Website"],
-            "contact_name": ["Contact", "Hiring Contact", "Hiring Contact Name", "Contact Name", "Hiring Contract Name", "contact_name"],
-            "contact_phone": ["Phone", "Hiring Contact Phone", "Contact Phone", "contact_phone"],
-            "contact_email": ["Email Address", "Hiring Contact Email", "Contact Email", "contact_email"],
-            "available_jobs": ["Availible Jobs", "Available Jobs", "Job Title", "available_jobs"],
+            "contact_name": ["Hiring Contact", "Hiring Contact Name", "Contact Name", "Contact", "Hiring Contract Name", "contact_name"],
+            "contact_phone": ["Hiring Contact Phone", "Contact Phone", "Phone", "contact_phone"],
+            "contact_email": ["Hiring Contact email", "Hiring Contact Email", "Contact Email", "Email Address", "contact_email", "email"],
+            "available_jobs": ["Available Jobs", "Availible Jobs", "Job Title", "available_jobs"],
             "notes": ["General Notes", "Any additional Notes", "Notes", "notes"],
-            "currently_hiring": ["TRUE ", "Currently Hiring", "currently_hiring"]
+            "currently_hiring": ["Currently Hiring", "TRUE ", "currently_hiring"]
         }
-        
+
         # Build update list
         for key, possible_headers in field_mapping.items():
             if key in data:
                 val = data[key]
                 if key == "currently_hiring":
                     val = "TRUE" if val == "Yes" else "FALSE"
-                
+
                 # Find matching header
                 col_idx = -1
                 for h in possible_headers:
                     if h in headers:
                         col_idx = headers.index(h) + 1
                         break
-                
+
                 if col_idx != -1:
                     wks.update_value((row_index, col_idx), str(val))
-        
+
         # Update "Date last verified" or "Date Entered"
         current_date = datetime.datetime.now().strftime("%Y-%m-%d")
         date_col = -1
@@ -972,22 +1270,26 @@ def update_hot_job():
             if h in headers:
                 date_col = headers.index(h) + 1
                 break
-                
+
         if date_col != -1:
             wks.update_value((row_index, date_col), current_date)
-            
+
         # Update "Validated/Entered By (Name)"
         submitter_col = -1
         for h in ["Validated/Entered By (Name)", "Validated By", "Entered By", "Validated/Entered By"]:
             if h in headers:
                 submitter_col = headers.index(h) + 1
                 break
-                
+
         submitter_name = data.get("submitter_name", "")
         if submitter_col != -1 and submitter_name:
             wks.update_value((row_index, submitter_col), submitter_name)
-            
+
+        if source == "phone_verification":
+            invalidate_cache('phone_verification_records')
+        else:
             invalidate_cache('master_jobs_records')
+
         return jsonify({"success": True, "message": "Job successfully updated!"})
     except Exception as e:
         print(traceback.format_exc())
@@ -1001,22 +1303,32 @@ def delete_hot_job():
     data = request.json
     if not data or not data.get("row_index"):
         return jsonify({"success": False, "error": "No row_index provided"}), 400
-        
+
     try:
         gc = get_gsheets_client()
-        try:
-            sh = gc.open_by_key("1NxDQTta3xvch5jn_j-DpWvGg0zRfJhpGnLv9rFQxw6I")
-        except Exception:
-            sh = gc.open_by_key(SPREADSHEET_ID_JOBS)
-            
-        try:
-            wks = sh.worksheet_by_title("Destinations")
-        except Exception:
+        source = data.get("source", "jobbank")
+
+        if source == "phone_verification":
+            sh = gc.open_by_key(SPREADSHEET_ID_PHONE_VERIFICATION)
             wks = sh.sheet1
+        else:
+            try:
+                sh = gc.open_by_key(SPREADSHEET_ID_MASTER_JOBBANK)
+            except Exception:
+                sh = gc.open_by_key(SPREADSHEET_ID_JOBS)
+            try:
+                wks = sh.worksheet_by_title("Destinations")
+            except Exception:
+                wks = sh.sheet1
 
         row_index = int(data.get("row_index"))
         wks.delete_rows(row_index)
-        invalidate_cache('master_jobs_records')
+
+        if source == "phone_verification":
+            invalidate_cache('phone_verification_records')
+        else:
+            invalidate_cache('master_jobs_records')
+
         return jsonify({"success": True, "message": "Job successfully deleted from spreadsheet!"})
     except Exception as e:
         print(traceback.format_exc())
@@ -1537,7 +1849,7 @@ def update_snapshot():
         gc = get_gsheets_client()
         
         try:
-            sh_master = gc.open_by_key("1NxDQTta3xvch5jn_j-DpWvGg0zRfJhpGnLv9rFQxw6I")
+            sh_master = gc.open_by_key(SPREADSHEET_ID_MASTER_JOBBANK)
         except Exception:
             sh_master = gc.open_by_key("1YIGS6DRmnEH3be9TG59nFVhGee2DVcc4MaaXFhKgSic")
             
@@ -1813,6 +2125,12 @@ def search_seekers():
         zip_match = re.search(r'\b\d{5}\b', address)
         if zip_match:
             origin_zip = zip_match.group(0)
+        else:
+            addr_lower = address.lower()
+            for c_name, c_zip in FL_CITY_ZIPS.items():
+                if c_name in addr_lower:
+                    origin_zip = c_zip
+                    break
     
     try:
         # Load seekers from Unemployed List spreadsheet
@@ -1886,7 +2204,7 @@ def search_seekers():
             seeker_job_types = str(seeker.get("Desired Job Types", seeker.get("Type of Job Needed", seeker.get("Desired Types", "")))).strip()
             
             # Calculate distance
-            seeker_zip_5 = seeker_zip[:5] if seeker_zip else ""
+            seeker_zip_5 = resolve_zip(seeker_zip, city)
             dist_miles = float('inf')
             
             if origin_zip and seeker_zip_5:
@@ -1973,104 +2291,127 @@ def search_seekers():
 def update_jobseeker_info():
     try:
         gc = get_gsheets_client()
-        try:
-            sh = gc.open_by_key("1NxDQTta3xvch5jn_j-DpWvGg0zRfJhpGnLv9rFQxw6I")
-        except Exception:
-            sh = gc.open_by_key(SPREADSHEET_ID_JOBS)
-            
-        try:
-            wks = sh.worksheet_by_title("Destinations")
-        except Exception:
-            wks = sh.sheet1
-        all_values = wks.get_all_values(include_tailing_empty_rows=False, include_tailing_empty=False)
-        
-        if not all_values or len(all_values) < 1:
-            return jsonify({"success": False, "error": "JobBank spreadsheet is empty."}), 400
-            
-        headers = all_values[0]
-        
-        # Locate or add 'Number of Job Seekers looking for this type of employment' column
-        target_header = "Number of Job Seekers looking for this type of employment"
-        col_idx = -1
-        for i, h in enumerate(headers):
-            if str(h).strip().lower() == target_header.lower():
-                col_idx = i + 1
-                break
-                
-        if col_idx == -1:
-            headers.append(target_header)
-            wks.update_row(1, headers)
-            col_idx = len(headers)
-            
-        # Locate 'Available Jobs' column
-        available_jobs_col_idx = -1
-        possible_job_headers = ["available jobs", "job title", "jobs", "title"]
-        for i, h in enumerate(headers):
-            if str(h).strip().lower() in possible_job_headers:
-                available_jobs_col_idx = i
-                break
-                
-        if available_jobs_col_idx == -1:
-            return jsonify({"success": False, "error": "Could not find 'Available Jobs' column in jobBank spreadsheet."}), 400
-            
+
         # Get seekers from Unemployed List spreadsheet
         try:
             seekers_records = get_seekers_records()
         except Exception as e:
             return jsonify({"success": False, "error": f"Error fetching seekers: {str(e)}"}), 500
 
-        # Calculate matches for each row
-        update_payload = []
-        for row in all_values[1:]:
-            available_jobs_str = ""
-            if available_jobs_col_idx < len(row):
-                available_jobs_str = str(row[available_jobs_col_idx]).strip()
-                
-            match_count = 0
-            if available_jobs_str:
-                jobBank_jobs = [j.strip() for j in available_jobs_str.split(",") if j.strip()]
-                
-                for seeker in seekers_records:
-                    seeker_job_type_str = str(seeker.get("Desired Job Types", seeker.get("Type of Job Needed", seeker.get("Desired Types", ""))))
-                    if seeker_job_type_str:
-                        seeker_jobs = [s.strip() for s in seeker_job_type_str.split(",") if s.strip()]
-                        
-                        matched = False
-                        for s_job in seeker_jobs:
-                            for jb_job in jobBank_jobs:
-                                if is_loose_match(s_job, jb_job):
-                                    matched = True
-                                    break
-                            if matched:
-                                break
-                                
-                        if matched:
-                            match_count += 1
-                            
-            update_payload.append([str(match_count)])
-            
-        # Update the spreadsheet column using batch update starting from row 2
-        def col_idx_to_letter(col):
-            letter = ''
-            while col > 0:
-                col, remainder = divmod(col - 1, 26)
-                letter = chr(65 + remainder) + letter
-            return letter
-            
-        col_letter = col_idx_to_letter(col_idx)
-        range_str = f"{col_letter}2"
-        
-        wks.update_values(crange=range_str, values=update_payload)
-        
-        # Invalidate the cache to ensure the dashboard shows fresh data
+        # Pre-parse seeker desired job types
+        parsed_seekers = []
+        for seeker in seekers_records:
+            seeker_job_type_str = str(seeker.get("Desired Job Types", seeker.get("Type of Job Needed", seeker.get("Desired Types", ""))))
+            if seeker_job_type_str:
+                seeker_jobs = [s.strip() for s in seeker_job_type_str.split(",") if s.strip()]
+                if seeker_jobs:
+                    parsed_seekers.append(seeker_jobs)
+
+        memo = {}
+        def get_match_count(avail_str):
+            if not avail_str:
+                return 0
+            if avail_str in memo:
+                return memo[avail_str]
+            job_types = [j.strip() for j in avail_str.split(",") if j.strip()]
+            count = 0
+            for s_jobs in parsed_seekers:
+                matched = False
+                for s_job in s_jobs:
+                    for jb_job in job_types:
+                        if is_loose_match(s_job, jb_job):
+                            matched = True
+                            break
+                    if matched:
+                        break
+                if matched:
+                    count += 1
+            memo[avail_str] = count
+            return count
+
+        def update_worksheet_counts(wks, sheet_label):
+            all_values = wks.get_all_values(include_tailing_empty_rows=False, include_tailing_empty=False)
+            if not all_values or len(all_values) < 1:
+                return 0
+
+            headers = all_values[0]
+
+            # Locate or add 'Number of Job Seekers looking for this type of employment' column
+            target_header = "Number of Job Seekers looking for this type of employment"
+            col_idx = -1
+            for i, h in enumerate(headers):
+                if str(h).strip().lower() == target_header.lower():
+                    col_idx = i + 1
+                    break
+
+            if col_idx == -1:
+                headers.append(target_header)
+                wks.update_row(1, headers)
+                col_idx = len(headers)
+
+            # Locate 'Available Jobs' column
+            available_jobs_col_idx = -1
+            possible_job_headers = ["available jobs", "availible jobs", "job title", "jobs", "title"]
+            for i, h in enumerate(headers):
+                if str(h).strip().lower() in possible_job_headers:
+                    available_jobs_col_idx = i
+                    break
+
+            if available_jobs_col_idx == -1:
+                raise ValueError(f"Could not find 'Available Jobs' column in {sheet_label} spreadsheet.")
+
+            update_payload = []
+            for row in all_values[1:]:
+                available_jobs_str = ""
+                if available_jobs_col_idx < len(row):
+                    available_jobs_str = str(row[available_jobs_col_idx]).strip()
+                update_payload.append([str(get_match_count(available_jobs_str))])
+
+            if update_payload:
+                def col_idx_to_letter(col):
+                    letter = ''
+                    while col > 0:
+                        col, remainder = divmod(col - 1, 26)
+                        letter = chr(65 + remainder) + letter
+                    return letter
+
+                col_letter = col_idx_to_letter(col_idx)
+                range_str = f"{col_letter}2"
+                wks.update_values(crange=range_str, values=update_payload)
+
+            return len(update_payload)
+
+        # 1. Update JobBank spreadsheet
+        try:
+            sh_jobbank = gc.open_by_key(SPREADSHEET_ID_MASTER_JOBBANK)
+        except Exception:
+            sh_jobbank = gc.open_by_key(SPREADSHEET_ID_JOBS)
+
+        try:
+            wks_jobbank = sh_jobbank.worksheet_by_title("Destinations")
+        except Exception:
+            wks_jobbank = sh_jobbank.sheet1
+
+        jobbank_count = update_worksheet_counts(wks_jobbank, "JobBank")
+
+        # 2. Update Phone_Verification_List spreadsheet
+        sh_phone = gc.open_by_key(SPREADSHEET_ID_PHONE_VERIFICATION)
+        wks_phone = sh_phone.sheet1
+        phone_count = update_worksheet_counts(wks_phone, "Phone_Verification_List")
+
+        # Invalidate caches to ensure dashboard and queues show fresh data
         invalidate_cache('master_jobs_records')
         invalidate_cache('new_jobs_records')
-        
-        return jsonify({"success": True, "message": f"Successfully updated jobBank jobSeeker counts for {len(update_payload)} rows!"})
-        
+        invalidate_cache('phone_verification_records')
+
+        return jsonify({
+            "success": True,
+            "message": f"Successfully updated jobSeeker counts for {jobbank_count} JobBank rows and {phone_count} Phone Verification rows!"
+        })
+
     except Exception as e:
         print(traceback.format_exc())
-        return jsonify({"success": False, "error": "Server Error", "details": str(e)}), 500
+        return jsonify({"success": False, "error": f"Error updating jobseeker counts: {str(e)}"}), 500
     finally:
         garbage_collector.collect()
 
@@ -2233,10 +2574,10 @@ def seeker_matching_jobs():
                     if not seeker_job_types:
                         seeker_job_types = seeker.get("Desired Job Types", seeker.get("Type of Job Needed", seeker.get("Desired Types", "")))
                     if not seeker_zip:
-                        zip_val = str(seeker.get("ZipCode", seeker.get("Zip", seeker.get("Zipcode", "")))).strip()
-                        if zip_val.endswith('.0'):
-                            zip_val = zip_val[:-2]
-                        seeker_zip = zip_val
+                        seeker_zip = resolve_zip(
+                            str(seeker.get("ZipCode", seeker.get("Zip", seeker.get("Zipcode", "")))),
+                            seeker.get("City", "")
+                        )
             except Exception as e:
                 print(f"Error fetching seeker by row_index: {e}")
                 
@@ -2247,7 +2588,7 @@ def seeker_matching_jobs():
         recent = []
         older = []
         
-        seeker_zip_5 = seeker_zip[:5] if seeker_zip else ""
+        seeker_zip_5 = resolve_zip(seeker_zip)
         three_weeks_ago = datetime.datetime.now().date() - datetime.timedelta(days=21)
         
         for row in all_jobs:
@@ -2274,9 +2615,7 @@ def seeker_matching_jobs():
             location = f"{address_val}, {city_val}, {state_val}".strip(", ")
             
             job_zip_val = str(get_row_field(row, "company_zip")).strip()
-            if job_zip_val.endswith('.0'):
-                job_zip_val = job_zip_val[:-2]
-            job_zip_5 = job_zip_val[:5] if job_zip_val else ""
+            job_zip_5 = resolve_zip(job_zip_val, city_val)
             
             dist_miles = float('inf')
             if seeker_zip_5 and job_zip_5:

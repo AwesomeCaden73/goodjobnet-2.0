@@ -200,7 +200,7 @@ function AdminPage({ user }) {
             style={{ opacity: updating ? 0.7 : 1 }}
           >
             <FaSync className={updating ? 'spin' : ''} />
-            <h3>{updating ? 'Updating jobBank info...' : 'Update jobBank jobSeeker information'}</h3>
+            <h3>{updating ? 'Updating jobSeeker info...' : 'Update JobBank & Phone Verification jobSeeker information'}</h3>
           </button>
 
           {/* Card 4: Export Jobs from JSearch */}
