@@ -32,6 +32,7 @@ function HotJobsReview({ user }) {
   const [selectedJobTypes, setSelectedJobTypes] = useState([]);
   const [companySearchQuery, setCompanySearchQuery] = useState('');
   const [reviewTitle, setReviewTitle] = useState('Hot Jobs Review');
+  const [showSeekersModal, setShowSeekersModal] = useState(false);
 
   const [callMethod, setCallMethod] = useState(() => {
     return localStorage.getItem('goodjobnet_call_method') || 'google-voice';
@@ -521,17 +522,30 @@ function HotJobsReview({ user }) {
     setMessage('');
     setSuccess(false);
 
-    if (category === '5days') setReviewTitle('Review Jobs Expiring Soon (5 days)');
-    else if (category === '46weeks') setReviewTitle('Review Expired Jobs (4-6 weeks)');
+    if (category === 'jobseekers' || category === '5days' || category === 'unverified_jobseekers') setReviewTitle('Verify jobs  for JobSeekers');
+    else if (category === 'my_assigned_seekers') setReviewTitle('Verify Jobs for My Assigned Job Seekers');
     else if (category === 'type') setReviewTitle(`Review Jobs by Type: ${type}`);
     else if (category === 'unverified_no_career') setReviewTitle('Phone Verification Queue');
     else if (category === 'company') setReviewTitle(`Review Jobs by Company: ${company}`);
+    else setReviewTitle('Hot Jobs Review');
 
-    fetch(`/api/hot-jobs-review?category=${category}&type=${encodeURIComponent(type)}&company=${encodeURIComponent(company)}`)
+    const coachParam = encodeURIComponent(user?.name || '');
+    fetch(`/api/hot-jobs-review?category=${category}&coach=${coachParam}&type=${encodeURIComponent(type)}&company=${encodeURIComponent(company)}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          setJobs(data.jobs);
+          let jobsList = data.jobs || [];
+          if (category === 'unverified_no_career') {
+            jobsList = [...jobsList].sort((a, b) => {
+              const valA = parseFloat(a.seekers_looking) || 0;
+              const valB = parseFloat(b.seekers_looking) || 0;
+              return valB - valA;
+            });
+          }
+          setJobs(jobsList);
+          if (jobsList.length === 0) {
+            setMessage('No matching jobs found.');
+          }
         } else {
           setMessage(data.error || 'Failed to fetch jobs.');
         }
@@ -546,6 +560,7 @@ function HotJobsReview({ user }) {
   const currentJob = jobs[currentIndex];
 
   const handleNext = () => {
+    setShowSeekersModal(false);
     if (currentIndexRef.current < jobsRef.current.length - 1) {
       const nextIdx = currentIndexRef.current + 1;
       setCurrentIndex(nextIdx);
@@ -566,6 +581,7 @@ function HotJobsReview({ user }) {
   };
 
   const handlePrev = () => {
+    setShowSeekersModal(false);
     if (currentIndexRef.current > 0) {
       const prevIdx = currentIndexRef.current - 1;
       setCurrentIndex(prevIdx);
@@ -586,6 +602,7 @@ function HotJobsReview({ user }) {
   };
 
   const handleGoBack = () => {
+    setShowSeekersModal(false);
     setCategorySelected(false);
     setJobs([]);
     setCurrentIndex(0);
@@ -616,16 +633,18 @@ function HotJobsReview({ user }) {
   useEffect(() => {
     const pathname = location.pathname;
     if (pathname === '/hot-jobs-5review') {
-      fetchJobs('5days');
-    } else if (pathname === '/hot-jobs-46review') {
-      fetchJobs('46weeks');
+      fetchJobs('jobseekers');
     } else {
       const params = new URLSearchParams(location.search);
       const category = params.get('category');
       const type = params.get('type') || '';
       const company = params.get('company') || '';
       if (category) {
-        fetchJobs(category, type, company);
+        if (category === '5days') {
+          fetchJobs('jobseekers');
+        } else {
+          fetchJobs(category, type, company);
+        }
       }
     }
   }, [location]);
@@ -1259,6 +1278,9 @@ function HotJobsReview({ user }) {
     const formData = new FormData(e.target);
     const data = Object.fromEntries(formData.entries());
     data.row_index = currentJob.row_index;
+    if (currentJob.source) {
+      data.source = currentJob.source;
+    }
 
     let careerWebsite = data.career_website ? data.career_website.trim() : '';
     if (careerWebsite) {
@@ -1350,7 +1372,7 @@ function HotJobsReview({ user }) {
       const response = await fetch('/api/delete-hot-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ row_index: job.row_index })
+        body: JSON.stringify({ row_index: job.row_index, source: job.source })
       });
       const result = await response.json();
       if (result.success) {
@@ -1400,14 +1422,14 @@ function HotJobsReview({ user }) {
           </header>
 
           <div className="form-grid mt-2">
+            <button className="btn primary-btn" onClick={() => fetchJobs('my_assigned_seekers')} style={{ height: 'auto', padding: '1.5rem', background: '#8e44ad' }}>
+              Verify Jobs for My Assigned Job Seekers
+            </button>
             <button className="btn primary-btn" onClick={() => fetchJobs('unverified_no_career')} style={{ height: 'auto', padding: '1.5rem', background: '#2980b9' }}>
               Phone Verification Queue
             </button>
-            <button className="btn primary-btn" onClick={() => fetchJobs('5days')} style={{ height: 'auto', padding: '1.5rem' }}>
-              Jobs Expiring in the next 5 days
-            </button>
-            <button className="btn primary-btn" onClick={() => fetchJobs('46weeks')} style={{ height: 'auto', padding: '1.5rem' }}>
-              Jobs that have expired in the last 4-6 weeks
+            <button className="btn primary-btn" onClick={() => fetchJobs('jobseekers')} style={{ height: 'auto', padding: '1.5rem' }}>
+              Verify jobs  for JobSeekers
             </button>
 
             <div className="input-group full-width mt-2" style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '1.5rem' }}>
@@ -1519,17 +1541,57 @@ function HotJobsReview({ user }) {
               Last Verified: {currentJob.date_last_verified || 'Never'} ({currentJob.age_days === 9999 ? 'Never Verified' : `${currentJob.age_days} days ago`})
             </div>
             <div style={{ fontSize: '0.9rem', marginTop: '2px' }}>
-              <Link
-                to="/job-seeker-search"
-                state={{
-                  autoSearch: true,
-                  jobTypes: (currentJob.available_jobs || '').split(',').map(s => s.trim()).filter(Boolean),
-                  address: ''
-                }}
-                className="interested-seekers-link"
-              >
-                Interested Seekers: {currentJob.seekers_looking || '0'}
-              </Link>
+              {currentJob.my_assigned_seekers ? (
+                <>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSeekersModal(true)}
+                      className="interested-seekers-link"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer',
+                        font: 'inherit',
+                        color: '#8e44ad',
+                        fontWeight: '600',
+                        textDecoration: 'underline'
+                      }}
+                      title="Click to view your matching assigned seekers"
+                    >
+                      My Assigned Seekers: {currentJob.my_assigned_count || currentJob.seekers_looking}
+                    </button>
+                  </div>
+                  <div style={{ marginTop: '2px' }}>
+                    <Link
+                      to="/job-seeker-search"
+                      state={{
+                        autoSearch: true,
+                        jobTypes: (currentJob.available_jobs || '').split(',').map(s => s.trim()).filter(Boolean),
+                        address: [currentJob.company_street, currentJob.company_city, currentJob.company_state, currentJob.company_zip].filter(Boolean).join(', ') || currentJob.company_zip || ''
+                      }}
+                      className="interested-seekers-link"
+                      style={{ color: 'var(--text-light)', fontSize: '0.85rem' }}
+                      title="View all center job seekers interested in this job"
+                    >
+                      Total Seekers: {currentJob.total_seekers_looking || currentJob.seekers_looking || '0'}
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <Link
+                  to="/job-seeker-search"
+                  state={{
+                    autoSearch: true,
+                    jobTypes: (currentJob.available_jobs || '').split(',').map(s => s.trim()).filter(Boolean),
+                    address: [currentJob.company_street, currentJob.company_city, currentJob.company_state, currentJob.company_zip].filter(Boolean).join(', ') || currentJob.company_zip || ''
+                  }}
+                  className="interested-seekers-link"
+                >
+                  Interested Seekers: {currentJob.seekers_looking || '0'}
+                </Link>
+              )}
             </div>
           </div>
         </header>
@@ -1793,6 +1855,126 @@ function HotJobsReview({ user }) {
           </div>
         </form>
       </div>
+
+      {/* MODAL FOR MATCHING ASSIGNED SEEKERS */}
+      {showSeekersModal && currentJob && currentJob.my_assigned_seekers && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem'
+          }}
+          onClick={() => setShowSeekersModal(false)}
+        >
+          <div
+            className="glass-panel"
+            style={{
+              background: 'white',
+              maxWidth: '650px',
+              width: '100%',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              borderRadius: '16px',
+              padding: '2rem',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', borderBottom: '1px solid #eee', paddingBottom: '1rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.3rem', color: '#2c3e50', margin: 0 }}>
+                  Matching Assigned Seekers
+                </h2>
+                <p style={{ margin: '0.3rem 0 0', color: '#7f8c8d', fontSize: '0.9rem' }}>
+                  <strong>{currentJob.company_name}</strong> — {currentJob.my_assigned_seekers.length} of your assigned seekers match this job
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSeekersModal(false)}
+                style={{
+                  background: '#f1f2f6',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+              {currentJob.my_assigned_seekers.map((s, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: '1rem',
+                    borderRadius: '10px',
+                    background: '#f8f9fa',
+                    border: '1px solid #e9ecef',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.4rem'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ fontSize: '1.05rem', color: '#2c3e50' }}>{s.name}</strong>
+                    {s.phone && (
+                      <a
+                        href={`tel:${s.phone}`}
+                        style={{
+                          color: 'var(--primary-color)',
+                          textDecoration: 'none',
+                          fontWeight: '600',
+                          fontSize: '0.9rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem'
+                        }}
+                      >
+                        <FaPhone style={{ fontSize: '0.75rem' }} /> {s.phone}
+                      </a>
+                    )}
+                  </div>
+                  {s.email && (
+                    <div style={{ fontSize: '0.85rem', color: '#7f8c8d' }}>
+                      Email: <a href={`mailto:${s.email}`} style={{ color: '#2980b9' }}>{s.email}</a>
+                    </div>
+                  )}
+                  <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '0.2rem' }}>
+                    <span style={{ fontWeight: '600', color: '#8e44ad' }}>Desired Jobs:</span> {s.desired_jobs || 'Not specified'}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: '1.5rem', textAlign: 'right' }}>
+              <button
+                type="button"
+                className="btn secondary-btn"
+                onClick={() => setShowSeekersModal(false)}
+                style={{ width: 'auto', padding: '0.5rem 1.5rem' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

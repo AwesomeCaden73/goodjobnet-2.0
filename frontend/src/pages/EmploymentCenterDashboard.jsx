@@ -6,13 +6,9 @@ function EmploymentCenterDashboard({ user }) {
   const navigate = useNavigate();
 
   const [stats, setStats] = useState({
-    expiring_soon: '...',
-    two_years_soon: '...',
+    unverified_jobseekers_count: '...',
     new_jobs_count: '...',
     new_jobs_url: '#',
-    new_seekers_count: '...',
-    new_seekers_url: '#',
-    expired_recently: '...',
     total_hot_jobs: '...',
     total_job_seekers: '...',
     job_types: {},
@@ -28,13 +24,9 @@ function EmploymentCenterDashboard({ user }) {
       .then(data => {
         if (data.success) {
           setStats({
-            expiring_soon: data.expiring_soon,
-            two_years_soon: data.two_years_soon,
+            unverified_jobseekers_count: data.unverified_jobseekers_count !== undefined ? data.unverified_jobseekers_count : (data.expiring_soon ?? '0'),
             new_jobs_count: data.new_jobs_count,
             new_jobs_url: data.new_jobs_url,
-            new_seekers_count: data.new_seekers_count,
-            new_seekers_url: data.new_seekers_url,
-            expired_recently: data.expired_recently,
             total_hot_jobs: data.total_hot_jobs,
             total_job_seekers: data.total_job_seekers,
             job_types: data.job_types || {},
@@ -193,6 +185,7 @@ function EmploymentCenterDashboard({ user }) {
             {renderPieChart(stats.seeker_types, stats.total_job_seekers, sharedColorMap, "No job seekers currently active")}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem', alignItems: 'center' }}>
               <Link to="/assigned-job-seekers" className="btn primary-btn" style={{ width: 'auto', background: '#8e44ad' }}>Show my assigned Job Seekers list</Link>
+              <Link to="/hot-jobs-review?category=my_assigned_seekers" className="btn secondary-btn" style={{ width: 'auto', borderColor: '#8e44ad', color: '#8e44ad' }}>Verify Jobs for My Assigned Seekers</Link>
             </div>
           </div>
         </div>
@@ -202,34 +195,20 @@ function EmploymentCenterDashboard({ user }) {
           <h3 style={{ color: '#c0392b', marginBottom: '1rem' }}>Attention Needed</h3>
           <ul style={{ listStyle: 'none', padding: 0 }}>
             <li style={{ padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-              <Link to="/hot-jobs-5review" className="dashboard-alert-link">
-                <span>Hot Jobs expiring in 5 days:</span>
-                <strong>{stats.expiring_soon}</strong>
-              </Link>
-            </li>
-            <li style={{ padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-              <Link to="/hot-jobs-46review" className="dashboard-alert-link">
-                <span>Hot Jobs that expired 4 - 6 weeks ago:</span>
-                <strong>{stats.expired_recently}</strong>
+              <Link to="/hot-jobs-review?category=jobseekers" className="dashboard-alert-link">
+                <span>Unverified jobs with interested jobseekers:</span>
+                <strong>{stats.unverified_jobseekers_count}</strong>
               </Link>
             </li>
             <li style={{ padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
               <Link to="/hot-jobs-review?category=unverified_no_career" className="dashboard-alert-link">
-                <span>Hot Jobs unverified &gt; 3 years (Phone Verification Required):</span>
+                <span>Phone Verification Queue (unverified &gt; 3 months):</span>
                 <strong>{stats.unverified_no_career_count}</strong>
               </Link>
             </li>
             <li style={{ padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>JobBank rows reaching 2 years in next 3 months:</span>
-              <strong>{stats.two_years_soon}</strong>
-            </li>
-            <li style={{ padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between' }}>
               <span>New unreviewed Job Opportunities:</span>
               <strong>{stats.new_jobs_count}</strong>
-            </li>
-            <li style={{ padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>New unreviewed Job Seekers:</span>
-              <strong>{stats.new_seekers_count}</strong>
             </li>
           </ul>
 

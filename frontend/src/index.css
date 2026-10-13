@@ -484,6 +484,129 @@ tr:hover td {
   color: white;
 }
 
+/* Enhanced Help Page Components */
+.help-card-wide {
+  max-width: 980px !important;
+}
+
+.help-pill-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  padding: 0.5rem 0;
+}
+
+.help-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  background: rgba(58, 123, 213, 0.08);
+  border: 1px solid rgba(58, 123, 213, 0.2);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: var(--transition);
+}
+
+.help-pill:hover {
+  background: var(--primary-color);
+  color: white;
+  transform: translateY(-1px);
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.help-feature-card {
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  transition: var(--transition);
+}
+
+.help-feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.help-feature-card h3 {
+  font-size: 1.05rem;
+  color: var(--text-dark);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.help-feature-card p {
+  font-size: 0.9rem;
+  color: var(--text-light);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.help-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 12px;
+  background: #eef2f7;
+  color: #4a5568;
+}
+
+.help-badge-primary { background: rgba(58, 123, 213, 0.15); color: #2563eb; }
+.help-badge-success { background: rgba(46, 204, 113, 0.15); color: #16a34a; }
+.help-badge-warning { background: rgba(243, 156, 18, 0.15); color: #d97706; }
+.help-badge-purple { background: rgba(142, 68, 173, 0.15); color: #7c3aed; }
+
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+  font-size: 0.88rem;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.help-table th, .help-table td {
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.help-table th {
+  background: rgba(58, 123, 213, 0.08);
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+.help-table kbd {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  font-family: monospace;
+  font-size: 0.82rem;
+  box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+}
+
+
 /* Voice Assistant Panel & Mic Pulse Styling */
 .voice-assistant-panel {
   background: var(--glass-bg);
