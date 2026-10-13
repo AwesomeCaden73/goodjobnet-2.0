@@ -730,9 +730,7 @@ def dashboard_stats():
         all_records = get_master_jobs_records()
         
         now = datetime.datetime.now()
-        expiring_in_5_days_count = 0
-        reaching_2_years_count = 0
-        expired_recently_count = 0
+        unverified_jobseekers_count = 0
         unverified_no_career_count = 0
         
         STANDARD_TYPES = [
@@ -768,18 +766,17 @@ def dashboard_stats():
                     age_days = (now - date_obj).days
                     has_date = True
 
+            # Unverified jobs with interested jobseekers
+            seekers_raw = str(get_row_field(row, "seekers_looking") or row.get("Number of Job Seekers looking for this type of employment") or "").strip()
+            try:
+                seekers_count = float(seekers_raw)
+            except (ValueError, TypeError):
+                seekers_count = 0.0
+
+            if seekers_count > 0 and not (0 <= age_days <= 21):
+                unverified_jobseekers_count += 1
+
             if is_currently_hiring:
-                if has_date:
-                    career_page = get_row_field(row, "career_website")
-                    has_career_page = bool(str(career_page).strip())
-                    if 16 <= age_days <= 21 and has_career_page:
-                        expiring_in_5_days_count += 1
-                    if 28 <= age_days <= 42 and has_career_page:
-                        expired_recently_count += 1
-                        
-                if 640 <= age_days < 730:
-                    reaching_2_years_count += 1
-                    
                 is_hot = (0 <= age_days <= 21)
                 if is_hot:
                     total_hot_jobs_matched += 1
@@ -847,9 +844,8 @@ def dashboard_stats():
             
         return jsonify({
             "success": True, 
-            "expiring_soon": expiring_in_5_days_count,
-            "expired_recently": expired_recently_count,
-            "two_years_soon": reaching_2_years_count,
+            "expiring_soon": unverified_jobseekers_count,
+            "unverified_jobseekers_count": unverified_jobseekers_count,
             "new_jobs_count": new_jobs_count,
             "new_jobs_url": new_jobs_url,
             "new_seekers_count": new_seekers_count,
@@ -1035,7 +1031,7 @@ def hot_jobs_review():
                 "total_assigned_seekers": len(assigned_seekers)
             })
 
-        if category in ["jobseekers", "job_seekers", "seekers", "5days"]:
+        if category in ["jobseekers", "job_seekers", "seekers", "5days", "unverified_jobseekers"]:
             all_records = get_master_jobs_records()
             source = "jobbank"
 
@@ -1044,7 +1040,7 @@ def hot_jobs_review():
                 if not company_name_val:
                     continue
 
-                seekers_raw = str(row.get("Number of Job Seekers looking for this type of employment", "")).strip()
+                seekers_raw = str(get_row_field(row, "seekers_looking") or row.get("Number of Job Seekers looking for this type of employment") or "").strip()
                 try:
                     seekers_count = float(seekers_raw)
                 except (ValueError, TypeError):
@@ -1061,6 +1057,9 @@ def hot_jobs_review():
                     date_obj = parse_date_string(date_str)
                     if date_obj:
                         age_days = (now - date_obj).days
+
+                if 0 <= age_days <= 21:
+                    continue
 
                 seekers_display = str(int(seekers_count)) if seekers_count == int(seekers_count) else str(seekers_count)
 

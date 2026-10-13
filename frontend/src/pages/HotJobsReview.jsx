@@ -522,7 +522,7 @@ function HotJobsReview({ user }) {
     setMessage('');
     setSuccess(false);
 
-    if (category === 'jobseekers' || category === '5days') setReviewTitle('Verify jobs  for JobSeekers');
+    if (category === 'jobseekers' || category === '5days' || category === 'unverified_jobseekers') setReviewTitle('Verify jobs  for JobSeekers');
     else if (category === 'my_assigned_seekers') setReviewTitle('Verify Jobs for My Assigned Job Seekers');
     else if (category === 'type') setReviewTitle(`Review Jobs by Type: ${type}`);
     else if (category === 'unverified_no_career') setReviewTitle('Phone Verification Queue');
@@ -632,7 +632,7 @@ function HotJobsReview({ user }) {
   // URL queries parser on mount/location change
   useEffect(() => {
     const pathname = location.pathname;
-    if (pathname === '/hot-jobs-5review' || pathname === '/hot-jobs-46review') {
+    if (pathname === '/hot-jobs-5review') {
       fetchJobs('jobseekers');
     } else {
       const params = new URLSearchParams(location.search);
@@ -640,7 +640,7 @@ function HotJobsReview({ user }) {
       const type = params.get('type') || '';
       const company = params.get('company') || '';
       if (category) {
-        if (category === '5days' || category === '46weeks') {
+        if (category === '5days') {
           fetchJobs('jobseekers');
         } else {
           fetchJobs(category, type, company);

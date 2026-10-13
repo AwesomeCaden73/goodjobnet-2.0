@@ -83,7 +83,6 @@ function App() {
             <Route path="/job-entry" element={<JobEntry user={user} />} />
             <Route path="/hot-jobs-review" element={<HotJobsReview user={user} />} />
             <Route path="/hot-jobs-5review" element={<HotJobsReview user={user} />} />
-            <Route path="/hot-jobs-46review" element={<HotJobsReview user={user} />} />
             <Route path="/admin-page" element={<AdminPage user={user} />} />
             <Route path="/assigned-job-seekers" element={<AssignedJobSeekersList user={user} />} />
             <Route path="/job-seeker-search" element={<JobSeekerSearch user={user} />} />
