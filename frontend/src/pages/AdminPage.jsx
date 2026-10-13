@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { FaShieldAlt, FaUser, FaBriefcase, FaUserTie, FaSync, FaFileUpload, FaCloudDownloadAlt, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaShieldAlt, FaUser, FaBriefcase, FaUserTie, FaSync, FaFileUpload, FaCloudDownloadAlt, FaExternalLinkAlt, FaMapMarkedAlt } from 'react-icons/fa';
 
 function AdminPage({ user }) {
   const navigate = useNavigate();
@@ -20,6 +20,8 @@ function AdminPage({ user }) {
   const [importStatus, setImportStatus] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState(null);
+  const [updatingMap, setUpdatingMap] = useState(false);
+  const [mapStatus, setMapStatus] = useState(null);
   const [syncingCsv, setSyncingCsv] = useState(false);
   const [syncCsvStatus, setSyncCsvStatus] = useState(null);
 
@@ -48,6 +50,7 @@ function AdminPage({ user }) {
     setImportStatus(null);
     setExportStatus(null);
     setSyncCsvStatus(null);
+    setMapStatus(null);
     fetch('/api/update-jobseeker-info', {
       method: 'POST',
       headers: {
@@ -79,6 +82,7 @@ function AdminPage({ user }) {
     setUpdateStatus(null);
     setExportStatus(null);
     setSyncCsvStatus(null);
+    setMapStatus(null);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -111,6 +115,7 @@ function AdminPage({ user }) {
     setUpdateStatus(null);
     setImportStatus(null);
     setSyncCsvStatus(null);
+    setMapStatus(null);
     fetch('/api/export-jsearch-jobs', {
       method: 'POST',
       headers: {
@@ -149,6 +154,7 @@ function AdminPage({ user }) {
   const handleSyncJobSeekersCsv = () => {
     setSyncingCsv(true);
     setSyncCsvStatus(null);
+    setMapStatus(null);
     setUpdateStatus(null);
     setImportStatus(null);
     setExportStatus(null);
@@ -172,6 +178,46 @@ function AdminPage({ user }) {
         setSyncingCsv(false);
         setSyncCsvStatus({ success: false, message: 'Network error occurred while syncing JobSeeker CSV.' });
         console.error('Error syncing JobSeeker CSV:', err);
+      });
+  };
+
+  const handleUpdateHotJobsMap = () => {
+    setUpdatingMap(true);
+    setMapStatus(null);
+    setImportStatus(null);
+    setUpdateStatus(null);
+    setExportStatus(null);
+    setSyncCsvStatus(null);
+    setMapStatus(null);
+
+    fetch('/api/update-hot-jobs-map', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+      .then(res => res.json())
+      .then(data => {
+        setUpdatingMap(false);
+        if (data.success) {
+          setMapStatus({
+            success: true,
+            message: data.message,
+            url: data.url,
+            count: data.count
+          });
+        } else {
+          setMapStatus({
+            success: false,
+            message: (data.error || 'Failed to update HotJobsMapFile.') + (data.details ? ` (${data.details})` : ''),
+            url: data.url
+          });
+        }
+      })
+      .catch(err => {
+        setUpdatingMap(false);
+        setMapStatus({ success: false, message: 'Network error occurred while updating HotJobsMapFile.' });
+        console.error('Error updating HotJobsMapFile:', err);
       });
   };
 
@@ -251,6 +297,8 @@ function AdminPage({ user }) {
           </button>
         </div>
 
+        <button type="button" className="nav-card" disabled={updatingMap} onClick={handleUpdateHotJobsMap}><FaMapMarkedAlt /><h3>{updatingMap ? 'Updating map...' : 'Update HotJobsMapFile'}</h3></button>
+        {mapStatus && <p role="status">{mapStatus.message} {mapStatus.url && <a href={mapStatus.url} target="_blank" rel="noreferrer">Open map spreadsheet</a>}</p>}
         {/* Operation Status Feedback */}
         {(updateStatus || importStatus || exportStatus || syncCsvStatus) && (
           <div style={{ marginTop: '1rem', marginBottom: '1.5rem', textAlign: 'center' }}>

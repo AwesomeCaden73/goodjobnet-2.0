@@ -26,7 +26,7 @@ export default function Home({ user }) {
   const metrics = [
     { label: 'Active job opportunities', value: stats?.total_hot_jobs, icon: BriefcaseBusiness, color: 'blue', path: '/hot-job-search', detail: 'Explore the job bank' },
     { label: 'People seeking employment', value: stats?.total_job_seekers, icon: Users, color: 'teal', path: '/job-seeker-search', detail: 'Make a connection' },
-    { label: 'Jobs expiring in 5 days', value: stats?.expiring_soon, icon: ClipboardCheck, color: 'purple', path: '/hot-jobs-5review', detail: 'Review opportunities' },
+    { label: 'Jobs awaiting verification', value: stats?.unverified_jobseekers_count, icon: ClipboardCheck, color: 'purple', path: '/hot-jobs-5review', detail: 'Review opportunities' },
   ];
   return <div className="home-page">
     <section className="welcome-banner"><div className="home-app-art" aria-hidden="true"><BriefcaseBusiness /><Users /><ClipboardCheck /></div><div className="welcome-copy"><p className="eyebrow">GOOD PEOPLE. NEW POSSIBILITIES.</p><h1>{user ? 'Welcome back, ' + user.name.split(' ')[0] : 'Your next chapter starts here.'}</h1><p>{user ? 'A little connection can make a big difference. Let’s get to work.' : 'Find local opportunities and the support to move forward.'}</p><div className="welcome-actions"><Link className="solid-button" to={user ? '/assigned-job-seekers' : '/hot-job-search'}>{user ? 'Go to my people' : 'Explore jobs'}<ArrowRight size={17} /></Link><Link className="text-link" to={user ? '/create' : '/help'}>{user ? 'Create new' : 'How we can help'}{user ? <Plus size={16} /> : <ArrowRight size={16} />}</Link></div></div><span className="region-label"><MapPin size={14} /> Central Florida</span></section>
@@ -40,12 +40,9 @@ export default function Home({ user }) {
       </>}</div>
       <section className="quick-access"><div className="section-heading"><h2>Quick access</h2><Link className="text-link" to="/apps">View all apps <ArrowRight size={15} /></Link></div><div className="filter-pills" aria-label="Quick access categories">{['All apps', 'Opportunities', 'People & support'].map((label, i) => <button key={label} className={filter === label ? 'selected' : ''} aria-pressed={filter === label} onClick={() => setFilter(label)}>{i === 0 ? <LayoutGrid size={15} /> : i === 1 ? <BriefcaseBusiness size={15} /> : <Users size={15} />}{label}</button>)}</div><div className="quick-list surface">{shortcuts.map(({ title, path, icon: Icon, color, description }) => <Link to={path} key={path} className="quick-row"><span className={'app-icon small ' + color}><Icon size={20} /></span><strong>{title}</strong><span className="quick-description">{description}</span><ArrowUpRight size={17} /></Link>)}</div></section>
       {user && <div className="dashboard-lower"><div className="breakdown-column"><Breakdown title="Hot jobs by industry" values={stats?.job_types} total={stats?.total_hot_jobs} color="#6264c7" /><Breakdown title="Job seekers by desired type" values={stats?.seeker_types} total={stats?.total_job_seekers} color="#168a88" /></div><section className="surface attention-card"><div className="section-heading"><h2><Clock3 size={18} /> Attention needed</h2><span className="status-badge">Review queue</span></div>{[
-        ['Expiring in the next 5 days', stats?.expiring_soon, '/hot-jobs-5review'],
-        ['Expired 4–6 weeks ago', stats?.expired_recently, '/hot-jobs-46review'],
-        ['Unverified over 3 years · phone required', stats?.unverified_no_career_count, '/hot-jobs-review?category=unverified_no_career'],
-        ['Reaching 2 years in the next 3 months', stats?.two_years_soon],
+        ['Unverified jobs with interested seekers', stats?.unverified_jobseekers_count, '/hot-jobs-review?category=jobseekers'],
+        ['Unverified over 3 months · phone required', stats?.unverified_no_career_count, '/hot-jobs-review?category=unverified_no_career'],
         ['New job opportunities', stats?.new_jobs_count, '/admin-page'],
-        ['New job seekers', stats?.new_seekers_count, '/admin-page'],
       ].map(([label, count, path]) => path ? <Link className="attention-row" key={label} to={path}><span>{label}</span><strong>{count ?? '—'}</strong><ArrowRight size={15} /></Link> : <div className="attention-row" key={label}><span>{label}</span><strong>{count ?? '—'}</strong></div>)}<Link to="/hot-jobs-review" className="text-link">Open review workspace <ArrowRight size={16} /></Link></section></div>}
       <footer className="workspace-footer"><span>GoodJobNet · Orlando Employment Center</span><span>Better opportunities. Stronger connections.</span><Link to="/help">Information & help</Link></footer>
     </div>

@@ -8,6 +8,40 @@ from drive_csv import fetch_csv_content_from_drive, validated_csv_rows
 
 
 class UpstreamIntegrationTests(unittest.TestCase):
+    def test_phone_queue_mutations_use_phone_sheet_and_invalidate_cache(self):
+        for endpoint in ['update-hot-job', 'delete-hot-job']:
+            with self.subTest(endpoint=endpoint):
+                self.gc.reset_mock()
+                backend._cache['phone_verification_records'] = {'data': [], 'timestamp': 0}
+                response = self.client.post('/api/' + endpoint, json={'row_index': 4, 'source': 'phone_verification', 'company_name': 'Updated'})
+                self.assertEqual(response.status_code, 200)
+                self.gc.open_by_key.assert_called_once_with(backend.SPREADSHEET_ID_PHONE_VERIFICATION)
+                self.assertNotIn('phone_verification_records', backend._cache)
+
+    def test_edit_sharepoint_seeker_uses_current_headers_and_sheet(self):
+        self.sheet.get_row.return_value = ['Full Name', 'Street Address', 'ZipCode', 'Desired Job Types', 'Comments']
+        response = self.client.post('/api/update-seeker', json={'row_index': 3, 'name': 'Person', 'street': 'Main St', 'zipcode': '32801', 'desired_job_types': ['Retail'], 'general_notes': 'Follow up'})
+        self.assertEqual(response.status_code, 200)
+        self.gc.open_by_key.assert_called_once_with(backend.SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT)
+        for column, value in enumerate(['Person', 'Main St', '32801', 'Retail', 'Follow up'], 1):
+            self.sheet.update_value.assert_any_call((3, column), value)
+
+    def test_map_export_only_includes_recent_hiring_jobs(self):
+        today = backend.datetime.datetime.now().strftime('%Y-%m-%d')
+        self.sheet.get_all_values.return_value = [
+            ['Name', 'Currently Hiring', 'Date last verified', 'Address', 'City', 'Zip'],
+            ['Current', 'TRUE', today, '1 Main St', 'Orlando', '32801'],
+            ['Closed', 'FALSE', today, '', '', ''],
+            ['Old', 'TRUE', '2000-01-01', '', '', ''],
+        ]
+        self.sheet.get_row.return_value = ['Name', 'Full Address (do not enter this manually)']
+        self.sheet.rows = 100
+        self.gc.open_by_key.return_value.url = 'https://example.com/map'
+        response = self.client.post('/api/update-hot-jobs-map')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['count'], 1)
+        self.sheet.update_values.assert_called_once_with(crange='A2', values=[['Current', '1 Main St, Orlando 32801']])
+
     def setUp(self):
         self.client = backend.app.test_client()
         backend._cache.clear()

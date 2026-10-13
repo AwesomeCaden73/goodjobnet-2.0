@@ -29,3 +29,30 @@ Compared the fork at `e638c19` with [upstream master at 1b1ef07](https://github.
 - ESLint still fails on existing unused bindings, empty cleanup catches, and React effect patterns. The review component has the same rule counts as committed HEAD: 24 unused-binding findings, 12 empty catches, three state-in-effect errors, and three effect-dependency warnings. The voice effect's existing dependency warning now also names the delete handler. These rules were not suppressed and unrelated cleanup was left out of this integration.
 
 No live Google Sheets/Drive writes, CSV sync, microphone, or telephone calls were performed. Live Drive permissions and voice operation still need an application smoke test. Spreadsheet identity remains row-based, as upstream designed it; edits from another session can still invalidate an already-loaded queue.
+
+
+## October 13, 2026 merge resolution
+
+Resolved the merge into `integration` from original GoodJobNet master `8248de5`.
+The 2.0 shell, themes, combined searches, ZIP toggle, entry forms, profile editing,
+and embedded map remain. Existing October 7 decisions above still apply.
+
+Integrated the SharePoint seeker source and column aliases, assigned-seeker job
+verification, interested-seeker queues, prioritized phone verification, source-aware
+job updates/deletion, city-to-ZIP fallback, map spreadsheet export, and expanded help.
+The active redesigned Home dashboard now displays the upstream verification metrics.
+The admin Excel import remains alongside Drive import and the new map export.
+Restored validated Drive loading, exact-ZIP validation, deletion row validation, and
+column-A writes where the initial merge had regressed them. Kept the upstream
+removal of the unused historical CSV.
+
+Validation: 18 frontend logic tests, 17 offline backend tests, production build,
+and route rendering (11 protected routes, six public pages) pass. Google services
+were mocked; no live spreadsheet writes or voice/calling checks were performed.
+The review component retains existing ESLint findings around unused bindings,
+cleanup catches, and React effects. Merge resolutions are staged, not committed.
+
+Seeker creation continues to use the fork's intake sheet. Existing seeker edits
+use the upstream SharePoint-derived roster and its current column names. Fields
+not present in that roster cannot be persisted by the existing header-based editor;
+a later SharePoint import replaces the roster, as designed upstream.
