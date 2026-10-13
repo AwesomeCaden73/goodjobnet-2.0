@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiCache';
 import { checkedJobResults } from '../jobSearchResults';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -46,7 +47,7 @@ export default function HotJobSearch({ user }) {
     setError('');
     setSelection(null);
     try {
-      const response = await fetch('/api/search-jobs', {
+      const response = await apiFetch('/api/search-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiCache';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Search, Users, MapPin, RotateCcw } from 'lucide-react';
@@ -44,7 +45,7 @@ function JobSeekerSearch() {
     setSelectedSeeker(seeker);
     setMatchingJobsLoading(true);
     try {
-      const response = await fetch(`/api/seeker-matching-jobs?row_index=${seeker.row_index}&job_types=${encodeURIComponent(seeker.job_types || seeker.desired_job_types || '')}&zipcode=${encodeURIComponent(seeker.zipcode || '')}`);
+      const response = await apiFetch(`/api/seeker-matching-jobs?row_index=${seeker.row_index}&job_types=${encodeURIComponent(seeker.job_types || seeker.desired_job_types || '')}&zipcode=${encodeURIComponent(seeker.zipcode || '')}`);
       const data = await response.json();
       if (data.success) {
         setMatchingJobs(data.results);
@@ -122,7 +123,7 @@ function JobSeekerSearch() {
     };
 
     try {
-      const response = await fetch('/api/search-seekers', {
+      const response = await apiFetch('/api/search-seekers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -178,6 +179,7 @@ function JobSeekerSearch() {
           setSearchContext(parsedInp);
           setSavedInputs(parsedInp);
           setSelectedJobTypes(parsedInp.job_types || []);
+          performSearch(parsedInp);
         }
       }, 0);
     } else {

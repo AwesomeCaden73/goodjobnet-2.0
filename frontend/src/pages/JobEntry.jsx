@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiCache';
 import useUnsavedChanges from '../components/useUnsavedChanges';
 import StateOptions from '../components/StateOptions';
 import EntryJobTypes from '../components/EntryJobTypes';
@@ -49,7 +50,7 @@ function JobEntry({ user }) {
     }
 
     try {
-      const response = await fetch('/api/submit-job', {
+      const response = await apiFetch('/api/submit-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

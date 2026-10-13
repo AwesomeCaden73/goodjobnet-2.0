@@ -1,7 +1,8 @@
+import { getCacheSyncing, subscribeCacheSync } from '../apiCache';
 import { BrandMark } from './BrandArtwork';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Search, CircleHelp, ArrowRight, LogOut, Palette } from 'lucide-react';
+import { Search, CircleHelp, ArrowRight, LogOut, Palette, RefreshCw } from 'lucide-react';
 import { visibleApps, launcher } from './navigation';
 import ThemeMenu from './ThemeMenu';
 
@@ -19,6 +20,7 @@ function HeaderSearch({ user }) {
 export default function Shell({ user, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const syncing = useSyncExternalStore(subscribeCacheSync, getCacheSyncing, () => false);
   const [panelState, setPanelState] = useState(null);
   const panel = panelState?.routeKey === location.key ? panelState.kind : null;
   const setPanel = kind => setPanelState(kind ? { kind, routeKey: location.key } : null);
@@ -50,6 +52,7 @@ export default function Shell({ user, onLogout }) {
     <a className="skip-link" href="#main-content">Skip to content</a>
     <header className="suite-header" ref={panelRef}>
       <Link to="/" className="suite-brand" onClick={go}><BrandMark />GoodJobNet<span className="beta-label">BETA</span></Link>
+      <div className="cache-sync-slot" role="status" aria-live="polite">{syncing && <span className="cache-sync-badge"><RefreshCw size={14} aria-hidden="true" />Syncing</span>}</div>
       <HeaderSearch key={location.pathname + location.search} user={user} />
       <div className="header-actions"><Link className="icon-button" to="/help" aria-label="Help"><CircleHelp size={20} /></Link>
         <button type="button" className="icon-button" aria-label="Theme settings" aria-expanded={panel === 'themes'} onClick={() => setPanel(panel === 'themes' ? null : 'themes')}><Palette size={20} /></button>

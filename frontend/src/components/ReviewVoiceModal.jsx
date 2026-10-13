@@ -7,7 +7,7 @@ const commandGroups = [
   ['Actions', ['Call company', 'Pause', 'Resume', 'Save', 'Delete job', 'Help']],
 ];
 
-export default function ReviewVoiceModal({ onClose, voiceActive, isVoicePaused, onToggle, callMethod, onCallMethodChange, speechStatus, micVolume, lastHeard, skipVoiceIntro, onSkipVoiceIntroChange }) {
+export default function ReviewVoiceModal({ onClose, voiceActive, isVoicePaused, onToggle, onPause, onResume, callMethod, onCallMethodChange, speechStatus, micVolume, lastHeard, skipVoiceIntro, onSkipVoiceIntroChange }) {
   const dialog = useRef(null);
   useEffect(() => {
     const trigger = document.activeElement;
@@ -20,7 +20,7 @@ export default function ReviewVoiceModal({ onClose, voiceActive, isVoicePaused, 
     <div className="review-voice-modal-content">
       <header className="voice-modal-heading"><span className="app-icon purple"><Mic size={24} /></span><div><h2 id="review-voice-title">Voice assistant</h2><p>Review opportunities with your voice.</p></div><button type="button" className="icon-button" aria-label="Close voice settings" onClick={onClose} autoFocus><X size={20} /></button></header>
       <section className="voice-control-card">
-        <div className="voice-control-row"><div><h3>Voice controls <span className={'voice-state ' + (voiceActive ? 'enabled' : '')}>{status}</span></h3><p>{voiceActive ? 'Turn off voice controls when you finish reviewing.' : 'Turn on your microphone to use spoken commands.'}</p></div><button type="button" className={voiceActive ? 'subtle-button' : 'solid-button'} onClick={onToggle}><Mic size={16} />{voiceActive ? 'Turn off' : 'Turn on'}</button></div>
+        <div className="voice-control-row"><div><h3>Voice controls <span className={'voice-state ' + (voiceActive ? 'enabled' : '')}>{status}</span></h3><p>{isVoicePaused && voiceActive ? 'Only Resume is recognized while paused.' : voiceActive ? 'Pause commands or turn off the assistant when finished.' : 'Turn on your microphone to use spoken commands.'}</p></div><div className="voice-control-actions">{voiceActive && <button type="button" className="solid-button" onClick={isVoicePaused ? onResume : onPause}>{isVoicePaused ? 'Resume' : 'Pause'}</button>}<button type="button" className={voiceActive ? 'subtle-button' : 'solid-button'} onClick={onToggle}><Mic size={16} />{voiceActive ? 'Turn off' : 'Turn on'}</button></div></div>
         <div className="voice-feedback"><span className={'voice-status-indicator ' + (voiceActive ? 'enabled' : '')} /><span role="status">{speechStatus}</span><kbd>V</kbd></div>
         <div className="voice-meter-row"><span>Microphone level</span><meter min="0" max="100" value={voiceActive ? micVolume : 0} aria-label="Microphone level" /><span>{voiceActive ? micVolume : 0}%</span></div>
         {voiceActive && <p className="voice-last-heard"><span>Last heard</span>{lastHeard || 'Waiting for a command...'}</p>}

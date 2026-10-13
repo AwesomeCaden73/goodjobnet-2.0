@@ -1,9 +1,11 @@
+import { apiFetch, cachedData } from '../apiCache';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 function AssignedJobSeekersList({ user }) {
-  const [loading, setLoading] = useState(true);
-  const [seekers, setSeekers] = useState([]);
+  const snapshot = user?.name ? cachedData(`/api/assigned-seekers?coach=${encodeURIComponent(user.name)}`) : null;
+  const [loading, setLoading] = useState(!snapshot);
+  const [seekers, setSeekers] = useState(snapshot?.results || []);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
@@ -16,7 +18,7 @@ function AssignedJobSeekersList({ user }) {
       }
 
       try {
-        const response = await fetch(`/api/assigned-seekers?coach=${encodeURIComponent(user.name)}`);
+        const response = await apiFetch(`/api/assigned-seekers?coach=${encodeURIComponent(user.name)}`);
         const result = await response.json();
         if (result.success) {
           setSeekers(result.results || []);

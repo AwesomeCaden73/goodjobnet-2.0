@@ -1,3 +1,5 @@
+import { voiceControlCommand } from '../voiceCommands';
+import { apiFetch } from '../apiCache';
 import { cancelSpeech } from '../speechCancellation';
 import ReviewVoiceModal from '../components/ReviewVoiceModal';
 import useUnsavedChanges from '../components/useUnsavedChanges';
@@ -195,9 +197,13 @@ function HotJobsReview({ user }) {
 
   const cancelAssistantSpeech = () => cancelSpeech(window.speechSynthesis, activeUtteranceRef, isSpeakingTTSRef);
 
-  useEffect(() => () => {
-    voiceActiveRef.current = false;
-    cancelSpeech(window.speechSynthesis, activeUtteranceRef, isSpeakingTTSRef);
+  useEffect(() => {
+    // Restore the live flag when development hot reload re-runs effect setup.
+    voiceActiveRef.current = voiceActive;
+    return () => {
+      voiceActiveRef.current = false;
+      cancelSpeech(window.speechSynthesis, activeUtteranceRef, isSpeakingTTSRef);
+    };
   }, []);
 
   // Text-To-Speech (TTS) voice synthesis with Speech Recognition coordination
@@ -549,15 +555,25 @@ function HotJobsReview({ user }) {
   };
 
   const handlePauseVoiceSilently = () => {
+    if (!voiceActiveRef.current) return;
+    cancelAssistantSpeech();
     setIsVoicePaused(true);
     isVoicePausedRef.current = true;
+    isListeningForJobsRef.current = false;
+    isListeningForCompanyTypeRef.current = false;
+    isListeningForNotesRef.current = false;
+    isListeningForHiringRef.current = false;
     setIsListeningForJobs(false);
     setIsListeningForCompanyType(false);
     setIsListeningForNotes(false);
     setIsListeningForHiring(false);
     if (notesTimeoutRef.current) clearTimeout(notesTimeoutRef.current);
+    spokenJobsAccumulatorRef.current = '';
     spokenNotesAccumulatorRef.current = '';
-    setSpeechStatus('Voice Assistant Paused (Say "Resume" to activate)');
+    currentSessionTranscriptRef.current = '';
+    try { recognitionRef.current?.abort(); } catch { /* Recognition may already have ended. */ }
+    setSpeechTrigger(previous => previous + 1);
+    setSpeechStatus('Paused - listening only for Resume');
   };
 
   const handlePauseVoice = () => {
@@ -566,6 +582,8 @@ function HotJobsReview({ user }) {
   };
 
   const handleResumeVoice = () => {
+    if (!voiceActiveRef.current) return;
+    cancelAssistantSpeech();
     setIsVoicePaused(false);
     isVoicePausedRef.current = false;
     setSpeechStatus('Listening for Commands...');
@@ -601,7 +619,7 @@ function HotJobsReview({ user }) {
     else setReviewTitle('Hot Jobs Review');
 
     const coachParam = encodeURIComponent(user?.name || '');
-    fetch(`/api/hot-jobs-review?category=${category}&coach=${coachParam}&type=${encodeURIComponent(type)}&company=${encodeURIComponent(company)}`)
+    apiFetch(`/api/hot-jobs-review?category=${category}&coach=${coachParam}&type=${encodeURIComponent(type)}&company=${encodeURIComponent(company)}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
@@ -827,9 +845,10 @@ function HotJobsReview({ user }) {
 
     let active = true;
     let rec = null;
+    let restartTimer = null;
 
     const startListening = () => {
-      if (!active) return;
+      if (!active || !voiceActiveRef.current) return;
 
       // If TTS is currently speaking, defer recognition start
       if (isSpeakingTTSRef.current) {
@@ -841,8 +860,8 @@ function HotJobsReview({ user }) {
       console.log("[Voice Assistant] Starting a new speech recognition session...");
       try {
         rec = new SpeechRecognition();
-        rec.continuous = isListeningForJobsRef.current || isListeningForNotesRef.current;
-        rec.interimResults = false;
+        rec.continuous = true;
+        rec.interimResults = true;
         rec.lang = 'en-US';
         recognitionRef.current = rec;
 
@@ -867,13 +886,13 @@ function HotJobsReview({ user }) {
         rec.onspeechstart = () => {
           if (!active) return;
           console.log("[Voice Assistant] Speech detected by microphone.");
-          setSpeechStatus('Speech detected...');
+          if (!isVoicePausedRef.current) setSpeechStatus('Speech detected...');
         };
 
         rec.onspeechend = () => {
           if (!active) return;
           console.log("[Voice Assistant] Speech ended. Processing audio...");
-          setSpeechStatus('Processing speech...');
+          if (!isVoicePausedRef.current) setSpeechStatus('Processing speech...');
         };
 
         rec.onresult = (event) => {
@@ -884,23 +903,17 @@ function HotJobsReview({ user }) {
           const transcript = event.results[event.results.length - 1][0].transcript.trim();
           console.log("[Voice Assistant] Transcript:", transcript);
           setLastHeard(transcript);
+          // Display partial recognition immediately, but execute each completed command once.
+          if (!event.results[event.results.length - 1].isFinal) return;
+          const transcriptLower = transcript.toLowerCase().replace(/[.!?]+$/g, '').trim();
 
-          const transcriptLower = transcript.toLowerCase();
-
+          const control = voiceControlCommand(transcript);
           if (isVoicePausedRef.current) {
-            if (transcriptLower.includes("resume") || transcriptLower.includes("start listening")) {
-              handleResumeVoice();
-            }
+            if (control === 'resume') handleResumeVoice();
             return;
           }
-
-          if (transcriptLower.includes("pause voice assistant") || transcriptLower.includes("pause voice") || transcriptLower === "pause" || transcriptLower.includes("stop listening")) {
-            handlePauseVoice();
-            if (rec) {
-              try { rec.stop(); } catch (e) { }
-            }
-            return;
-          }
+          if (control === 'pause') { handlePauseVoice(); return; }
+          if (control === 'resume') return;
 
           playChirp('listen');
 
@@ -1132,15 +1145,18 @@ function HotJobsReview({ user }) {
             playChirp('error');
             speak("Microphone permission was denied. Voice controls disabled.");
           } else if (e.error === 'network') {
-            setSpeechStatus('Network Error. Google Speech API offline.');
+            setSpeechStatus('Speech service unavailable. Check your connection or restart voice controls.');
             playChirp('error');
           } else if (e.error === 'audio-capture') {
             setSpeechStatus('Audio Capture Error. Microphone in use.');
             playChirp('error');
+          } else if (e.error === 'aborted') {
+            // Expected when speech output temporarily suspends recognition.
+            return;
           } else if (e.error === 'no-speech') {
-            let statusText = 'Listening for Commands...';
+            let statusText = 'No speech detected - check your browser microphone input.';
             if (isVoicePausedRef.current) {
-              statusText = 'Voice Assistant Paused (Say "Resume" to activate)';
+              statusText = 'Paused - listening only for Resume';
             } else if (isListeningForJobsRef.current) {
               statusText = 'Listening for Job Types (Say Done when finished)...';
             } else if (isListeningForCompanyTypeRef.current) {
@@ -1173,7 +1189,8 @@ function HotJobsReview({ user }) {
           }
 
           // Restart after a short delay if still active
-          setTimeout(() => {
+          clearTimeout(restartTimer);
+          restartTimer = setTimeout(() => {
             if (active && voiceActiveRef.current) {
               startListening();
             } else {
@@ -1194,9 +1211,11 @@ function HotJobsReview({ user }) {
     return () => {
       console.log("[Voice Assistant] Cleaning up speech recognition session...");
       active = false;
+      clearTimeout(restartTimer);
       if (rec) {
+        rec.onstart = rec.onresult = rec.onerror = rec.onend = rec.onspeechstart = rec.onspeechend = null;
         try {
-          rec.stop();
+          rec.abort();
         } catch (e) {
           // ignore
         }
@@ -1204,7 +1223,7 @@ function HotJobsReview({ user }) {
       if (notesTimeoutRef.current) {
         clearTimeout(notesTimeoutRef.current);
       }
-      recognitionRef.current = null;
+      if (recognitionRef.current === rec) recognitionRef.current = null;
     };
   }, [voiceActive, speechTrigger]);
 
@@ -1362,7 +1381,7 @@ function HotJobsReview({ user }) {
     }
 
     try {
-      const response = await fetch('/api/update-hot-job', {
+      const response = await apiFetch('/api/update-hot-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -1431,7 +1450,7 @@ function HotJobsReview({ user }) {
     setSuccess(false);
 
     try {
-      const response = await fetch('/api/delete-hot-job', {
+      const response = await apiFetch('/api/delete-hot-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ row_index: job.row_index, source: job.source })
@@ -1587,7 +1606,7 @@ function HotJobsReview({ user }) {
           </div>
         </header>
 
-        {showVoiceSettings && <ReviewVoiceModal onClose={() => setShowVoiceSettings(false)} voiceActive={voiceActive} isVoicePaused={isVoicePaused} onToggle={toggleVoiceActive} callMethod={callMethod} onCallMethodChange={setCallMethod} speechStatus={speechStatus} micVolume={micVolume} lastHeard={lastHeard} skipVoiceIntro={skipVoiceIntro} onSkipVoiceIntroChange={setSkipVoiceIntro} />}
+        {showVoiceSettings && <ReviewVoiceModal onClose={() => setShowVoiceSettings(false)} voiceActive={voiceActive} isVoicePaused={isVoicePaused} onToggle={toggleVoiceActive} onPause={handlePauseVoice} onResume={handleResumeVoice} callMethod={callMethod} onCallMethodChange={setCallMethod} speechStatus={speechStatus} micVolume={micVolume} lastHeard={lastHeard} skipVoiceIntro={skipVoiceIntro} onSkipVoiceIntroChange={setSkipVoiceIntro} />}
         <div className="review-split">
           <CurrentOpportunity key={`summary-${currentJob.source}-${currentJob.row_index}-${updateKey}`} job={{ ...currentJob, available_jobs: stagedJobs.current ?? currentJob.available_jobs }} busy={saving || deleting} onJobsSave={value => { stagedJobs.current = value; setPositionsVersion(previous => previous + 1); }} onEditChange={(changed, editing) => { editorDirty.current = changed; setEditingJobs(editing); refreshDirty(); }} voiceActive={voiceActive} onCall={handleCallCompany} onVoiceSettings={() => setShowVoiceSettings(true)}>
             <div className="review-current-footer">

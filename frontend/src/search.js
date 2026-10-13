@@ -1,6 +1,7 @@
+import { apiFetch } from './apiCache.js';
 import { checkedJobResults } from './jobSearchResults.js';
 // Compose the existing read-only search operations without changing their contracts.
-export async function searchWorkspace(query, user, signal, request = fetch) {
+export async function searchWorkspace(query, user, signal, request = apiFetch) {
   const post = async (endpoint, payload) => {
     const response = await request(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal });
     const data = await response.json();

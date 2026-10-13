@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiCache';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaBriefcase, FaUserTie, FaSearch } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
@@ -23,7 +24,7 @@ function EmploymentCenterDashboard({ user }) {
 
 
   useEffect(() => {
-    fetch('/api/dashboard-stats')
+    apiFetch('/api/dashboard-stats')
       .then(res => res.json())
       .then(data => {
         if (data.success) {

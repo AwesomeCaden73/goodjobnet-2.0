@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Phone, Mic, Plus, X } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Phone, Mic, Plus, X, GripVertical } from 'lucide-react';
 import { phoneNumbers } from './contactDetails';
 import { fullAddress } from '../reviewAddress';
 
@@ -10,6 +10,15 @@ export function CurrentOpportunity({ job, voiceActive = false, onCall, onVoiceSe
   const [draft, setDraft] = useState(positions);
   const [adding, setAdding] = useState(false);
   const [text, setText] = useState('');
+  const dragIndex = useRef(null);
+  const [dropIndex, setDropIndex] = useState(null);
+  const move = (from, to) => {
+    if (from === null || from === to || to < 0 || to >= draft.length) return;
+    const next = [...draft];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    setDraft(next); notify(next, text);
+  };
   const displayed = editing ? draft : positions;
   const changed = values => values.join(', ') !== positions.join(', ');
   const notify = (values, input = '') => onEditChange?.(changed(values) || !!input.trim(), true);
@@ -25,9 +34,17 @@ export function CurrentOpportunity({ job, voiceActive = false, onCall, onVoiceSe
     <p className="review-address">{fullAddress(job) || 'No address provided'}</p>
     <div className="review-contact"><h3>Hiring contact</h3><p>{job.contact_name || 'No contact name provided'}</p><p>{job.contact_phone || 'No phone number provided'}</p><div className="review-call-actions">{!voiceActive && phone ? <a className="solid-button" href={`tel:${phone}`}><Phone size={17} />Call</a> : <button type="button" className="solid-button" onClick={onCall} disabled={!phone}><Phone size={17} />Call</button>}<button type="button" className={`subtle-button voice-assistant-button${voiceActive ? ' voice-assistant-active' : ''}`} onClick={onVoiceSettings} aria-haspopup="dialog" aria-label={voiceActive ? 'Voice Assistant, active' : 'Voice Assistant'}><Mic size={17} />Voice Assistant</button></div></div>
     <div><h3>Currently open positions</h3>
-      <ul className="review-positions">{displayed.map((position, index) => <li key={index}>{position}{editing && <button type="button" className="position-delete" aria-label={`Remove ${position}`} onClick={() => { const next = draft.filter((_, i) => i !== index); setDraft(next); notify(next, text); }}><X size={12} /></button>}</li>)}
+      <ul className="review-positions">{displayed.map((position, index) => <li key={index} draggable={editing} className={editing ? `position-draggable${dropIndex === index ? ' position-drop-target' : ''}` : undefined}
+        onDragStart={event => { if (!editing || event.target.closest('button')) { event.preventDefault(); return; } dragIndex.current = index; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(index)); }}
+        onDragOver={event => { if (!editing || dragIndex.current === null) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropIndex(index); }}
+        onDrop={event => { if (!editing || dragIndex.current === null) return; event.preventDefault(); move(dragIndex.current, index); dragIndex.current = null; setDropIndex(null); }}
+        onDragEnd={() => { dragIndex.current = null; setDropIndex(null); }}
+        tabIndex={editing ? 0 : undefined} aria-label={editing ? `${position}. Use Alt and arrow keys to reorder.` : undefined}
+        onKeyDown={event => { if (editing && event.altKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) { event.preventDefault(); event.stopPropagation(); move(index, index + (['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 1)); } }}>
+        {editing && <GripVertical size={14} className="position-drag-handle" aria-hidden="true" />}{position}{editing && <button type="button" className="position-delete" aria-label={`Remove ${position}`} onClick={() => { const next = draft.filter((_, i) => i !== index); setDraft(next); notify(next, text); }}><X size={12} /></button>}</li>)}
       {editing && <li className="position-add">{adding ? <input autoFocus aria-label="New job" value={text} placeholder="Job title" onChange={event => { setText(event.target.value); notify(draft, event.target.value); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); add(); } if (event.key === 'Escape') { event.stopPropagation(); setAdding(false); setText(''); notify(draft); } }} onBlur={() => { if (text.trim()) add(); }} /> : <button type="button" aria-label="Add job" onClick={() => setAdding(true)}><Plus size={18} /></button>}</li>}
       </ul>
+      {editing && <p className="position-reorder-hint">Drag jobs to reorder, or focus a job and use Alt + arrow keys.</p>}
       {!displayed.length && !editing && <p className="muted">No positions listed.</p>}
       <div className="position-edit-actions">{editing ? <><button type="button" className="subtle-button" onClick={() => { setEditing(false); setDraft(positions); setText(''); setAdding(false); onEditChange?.(false, false); }}>Discard</button><button type="button" className="solid-button" onClick={() => { const values = text.trim() ? add() : draft; onJobsSave?.(values.join(', ')); setEditing(false); onEditChange?.(false, false); }}>Save</button></> : <button type="button" className="subtle-button" disabled={busy} onClick={() => { setDraft(positions); setEditing(true); onEditChange?.(false, true); }}>Add/Edit Jobs</button>}</div>
     </div>

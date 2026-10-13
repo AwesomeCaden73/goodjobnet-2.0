@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiCache';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { FaShieldAlt, FaUser, FaBriefcase, FaUserTie, FaSync, FaFileUpload, FaCloudDownloadAlt, FaExternalLinkAlt, FaMapMarkedAlt } from 'react-icons/fa';
@@ -27,7 +28,7 @@ function AdminPage({ user }) {
 
 
   useEffect(() => {
-    fetch('/api/dashboard-stats')
+    apiFetch('/api/dashboard-stats')
       .then(res => { if (!res.ok) throw new Error('Unavailable'); return res.json(); })
       .then(data => {
         if (!data.success) throw new Error('Unavailable');
@@ -51,7 +52,7 @@ function AdminPage({ user }) {
     setExportStatus(null);
     setSyncCsvStatus(null);
     setMapStatus(null);
-    fetch('/api/update-jobseeker-info', {
+    apiFetch('/api/update-jobseeker-info', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -87,7 +88,7 @@ function AdminPage({ user }) {
     const formData = new FormData();
     formData.append('file', file);
 
-    fetch('/api/import-jobseekers', {
+    apiFetch('/api/import-jobseekers', {
       method: 'POST',
       body: formData
     })
@@ -116,7 +117,7 @@ function AdminPage({ user }) {
     setImportStatus(null);
     setSyncCsvStatus(null);
     setMapStatus(null);
-    fetch('/api/export-jsearch-jobs', {
+    apiFetch('/api/export-jsearch-jobs', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -159,7 +160,7 @@ function AdminPage({ user }) {
     setImportStatus(null);
     setExportStatus(null);
 
-    fetch('/api/sync-jobseekers-csv-to-drive', {
+    apiFetch('/api/sync-jobseekers-csv-to-drive', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -190,7 +191,7 @@ function AdminPage({ user }) {
     setSyncCsvStatus(null);
     setMapStatus(null);
 
-    fetch('/api/update-hot-jobs-map', {
+    apiFetch('/api/update-hot-jobs-map', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

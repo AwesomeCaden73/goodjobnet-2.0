@@ -1,3 +1,4 @@
+import { clearApiCache } from './apiCache';
 ﻿import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import Login from './pages/Login';
@@ -40,8 +41,8 @@ export default function App() {
     window.addEventListener('storage', sync);
     return () => window.removeEventListener('storage', sync);
   }, []);
-  const handleLogin = data => { localStorage.setItem('goodjobnet_user', JSON.stringify(data)); setUser(data); };
-  const handleLogout = () => { localStorage.removeItem('goodjobnet_user'); sessionStorage.removeItem('seeker_search_inputs'); sessionStorage.removeItem('seeker_search_results'); setUser(null); };
+  const handleLogin = data => { clearApiCache(); localStorage.setItem('goodjobnet_user', JSON.stringify(data)); setUser(data); };
+  const handleLogout = () => { clearApiCache(); localStorage.removeItem('goodjobnet_user'); sessionStorage.removeItem('seeker_search_inputs'); sessionStorage.removeItem('seeker_search_results'); setUser(null); };
   return <ThemeProvider><BrowserRouter><Routes>
     <Route path="/login" element={<SignInRoute user={user} onLogin={handleLogin} />} />
     <Route element={<Shell user={user} onLogout={handleLogout} />}>

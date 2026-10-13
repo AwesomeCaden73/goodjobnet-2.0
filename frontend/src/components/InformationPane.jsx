@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiCache';
 import ContactActions from './ContactActions.jsx';
 import { matchingJob } from './contactDetails';
 import { useEffect, useRef, useState } from 'react';
@@ -25,7 +26,7 @@ export default function InformationPane({ selection, onClose, returnTo, canEdit 
   useEffect(() => {
     if (selection.kind === 'person') return;
     const controller = new AbortController();
-    fetch('/api/hot-jobs-review?category=company&company=' + encodeURIComponent(selection.record.company), { signal: controller.signal })
+    apiFetch('/api/hot-jobs-review?category=company&company=' + encodeURIComponent(selection.record.company), { signal: controller.signal })
       .then(response => { if (!response.ok) throw new Error(); return response.json(); })
       .then(data => {
         if (!data.success) throw new Error();

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { apiFetch, cachedData } from '../apiCache';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, BriefcaseBusiness, Users, ClipboardCheck, MapPin, Clock3, HeartHandshake } from 'lucide-react';
 
@@ -9,17 +10,49 @@ function Breakdown({ title, values = {}, total, color }) {
 }
 
 export default function Home({ user }) {
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState(() => user ? cachedData('/api/dashboard-stats') : null);
   const [error, setError] = useState('');
+  const [dataVersion, setDataVersion] = useState(0);
+  useEffect(() => { const refresh = () => setDataVersion(value => value + 1); window.addEventListener('goodjobnet-data-updated', refresh); return () => window.removeEventListener('goodjobnet-data-updated', refresh); }, []);
+  const dashboardRef = useRef(null);
+  useLayoutEffect(() => {
+    const dashboard = dashboardRef.current;
+    if (!dashboard) return;
+    let lastWidth = -1;
+    const measure = () => {
+      const width = dashboard.getBoundingClientRect().width;
+      if (width === lastWidth) return;
+      lastWidth = width;
+      const cards = [...dashboard.querySelectorAll('.breakdown, .attention-card')];
+      const heights = cards.map(card => {
+        // Measure an invisible collapsed copy so expanding a card never changes the baseline.
+        const copy = card.cloneNode(true);
+        copy.setAttribute('aria-hidden', 'true');
+        copy.inert = true;
+        copy.querySelectorAll('details').forEach(details => details.removeAttribute('open'));
+        Object.assign(copy.style, { position: 'absolute', visibility: 'hidden', pointerEvents: 'none', width: `${card.getBoundingClientRect().width}px`, minHeight: '0', height: 'auto' });
+        dashboard.appendChild(copy);
+        const height = copy.getBoundingClientRect().height;
+        copy.remove();
+        return height;
+      });
+      dashboard.style.setProperty('--dashboard-card-min-height', `${Math.ceil(Math.max(0, ...heights))}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(dashboard);
+    document.fonts.ready.then(() => { if (dashboard.isConnected) { lastWidth = -1; measure(); } });
+    return () => observer.disconnect();
+  }, [stats, user]);
   useEffect(() => {
     if (!user) return;
     const controller = new AbortController();
-    fetch('/api/dashboard-stats', { signal: controller.signal }).then(r => r.json()).then(data => {
+    apiFetch('/api/dashboard-stats', { signal: controller.signal }).then(r => r.json()).then(data => {
       if (!data.success) throw new Error('Dashboard information is unavailable.');
       setStats(data);
     }).catch(e => { if (e.name !== 'AbortError') setError('Dashboard information could not be loaded. Refresh to try again.'); });
     return () => controller.abort();
-  }, [user]);
+  }, [user, dataVersion]);
   const metrics = [
     { label: 'Active job opportunities', value: stats?.total_hot_jobs, icon: BriefcaseBusiness, color: 'blue', path: '/hot-job-search', detail: 'Explore the job bank' },
     { label: 'People seeking employment', value: stats?.total_job_seekers, icon: Users, color: 'teal', path: '/job-seeker-search', detail: 'Make a connection' },
@@ -34,7 +67,7 @@ export default function Home({ user }) {
         <Link className="feature-card surface" to="/map"><div className="feature-illustration map-art"><MapPin size={62} strokeWidth={1.1} /><span /><span /></div><div><h3>Discover what’s nearby</h3><p>See employment opportunities across Central Florida.</p><span className="text-link">Explore the map <ArrowRight size={16} /></span></div></Link>
         <Link className="feature-card surface" to="/help"><div className="feature-illustration people-art"><HeartHandshake size={62} strokeWidth={1.1} /><span /><span /></div><div><h3>You don’t have to do it alone</h3><p>Get support with resumes, interviews, and your job search.</p><span className="text-link">Find support <ArrowRight size={16} /></span></div></Link>
       </>}</div>
-      {user && <div className="dashboard-lower"><div className="breakdown-column"><Breakdown title="Hot jobs by industry" values={stats?.job_types} total={stats?.total_hot_jobs} color="#6264c7" /><Breakdown title="Job seekers by desired type" values={stats?.seeker_types} total={stats?.total_job_seekers} color="#168a88" /></div><section className="surface attention-card"><div className="section-heading"><h2><Clock3 size={18} /> Attention needed</h2><span className="status-badge">Review queue</span></div>{[
+      {user && <div className="dashboard-lower" ref={dashboardRef}><div className="breakdown-column"><Breakdown title="Hot jobs by industry" values={stats?.job_types} total={stats?.total_hot_jobs} color="#6264c7" /><Breakdown title="Job seekers by desired type" values={stats?.seeker_types} total={stats?.total_job_seekers} color="#168a88" /></div><section className="surface attention-card"><div className="section-heading"><h2><Clock3 size={18} /> Attention needed</h2><span className="status-badge">Review queue</span></div>{[
         ['Unverified jobs with interested seekers', stats?.unverified_jobseekers_count, '/hot-jobs-review?category=jobseekers'],
         ['Unverified over 3 months · phone required', stats?.unverified_no_career_count, '/hot-jobs-review?category=unverified_no_career'],
         ['New job opportunities', stats?.new_jobs_count, '/admin-page'],

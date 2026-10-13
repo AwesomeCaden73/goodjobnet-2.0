@@ -36,3 +36,11 @@ test('canceling speech invalidates callbacks before synchronous browser cancella
   assert.equal(restarted, false);
   cancelSpeech(undefined, utteranceRef, speakingRef);
 });
+
+
+import { voiceControlCommand } from './voiceCommands.js';
+test('pause and resume recognize browser punctuation and polite command phrases', () => {
+  for (const words of ['Pause.', 'pause voice assistant!', 'Please stop listening.', 'PAUSE VOICE please']) assert.equal(voiceControlCommand(words), 'pause');
+  for (const words of ['Resume.', 'Please resume voice assistant.', 'Start listening!', 'continue listening']) assert.equal(voiceControlCommand(words), 'resume');
+  for (const words of ['Update notes', 'resume writer', 'pause at the intersection']) assert.equal(voiceControlCommand(words), null);
+});
