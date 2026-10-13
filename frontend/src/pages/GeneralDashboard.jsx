@@ -31,10 +31,6 @@ function GeneralDashboard() {
             <FaBriefcase />
             <h3>Job Opportunity Entry</h3>
           </Link>
-          <Link to="/job-seeker-entry" className="nav-card">
-            <FaUserTie />
-            <h3>Job Seeker Entry</h3>
-          </Link>
         </div>
 
         <div className="form-footer">

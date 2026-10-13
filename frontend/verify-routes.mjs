@@ -25,7 +25,6 @@ try {
     '/employment-dashboard': 'Your community at a glance',
     '/dashboard': 'Your community at a glance',
     '/job-entry': 'Job opportunity',
-    '/job-seeker-entry': 'Job seeker',
     '/job-seeker-search': 'Job Seeker Search',
     '/assigned-job-seekers': 'Assigned Job Seekers List',
     '/hot-jobs-review': 'Review jobs',
@@ -39,12 +38,12 @@ try {
     assert(!html.includes(title), 'Private content rendered while signed out: ' + path);
     assert(!html.includes('href="/job-seeker-search"'), 'Private navigation leaked: ' + path);
   }
-  for (const [path, title] of Object.entries({ '/': 'Your next chapter starts here.', '/hot-job-search': 'Job Search', '/help': 'Information &amp; Help', '/map': 'Opportunities near you', '/apps': 'Everything you need', '/login': 'Sign in' })) {
+  for (const [path, title] of Object.entries({ '/': 'A good place to start', '/hot-job-search': 'Job Search', '/help': 'Information &amp; Help', '/map': 'Opportunities near you', '/apps': 'Everything you need', '/login': 'Sign in' })) {
     assert(render(path).includes(title), 'Public page failed to render: ' + path);
   }
   values.set('goodjobnet_user', JSON.stringify({ name: 'Test Reviewer', role: 'admin' }));
   for (const [path, title] of Object.entries(privatePages)) assert(render(path).includes(title), 'Signed-in page failed to render: ' + path);
-  for (const path of ['/create', '/job-entry', '/job-seeker-entry', '/hot-jobs-review']) assert(!render(path).includes('class="section-navigation"'), 'Unexpected section tabs: ' + path);
+  for (const path of ['/create', '/job-entry', '/hot-jobs-review']) assert(!render(path).includes('class="section-navigation"'), 'Unexpected section tabs: ' + path);
   assert(!render('/hot-job-search').includes('href="/job-entry"'), 'Jobs still includes an entry tab');
   assert(!render('/job-seeker-search').includes('href="/job-seeker-entry"'), 'People still includes an entry tab');
   const { default: EntryJobTypes } = await server.ssrLoadModule('/src/components/EntryJobTypes.jsx');
@@ -59,6 +58,26 @@ try {
   const jobGroups = renderToString(React.createElement(JobGroups, { results: { recent: manyJobs, older: [] }, onSelect() {} }));
   assert.equal((jobGroups.match(/aria-label="View job:/g) || []).length, 25, 'Large result sets must render a bounded initial list');
   assert(jobGroups.replace(/<!--.*?-->/g, '').includes('Show more currently hiring opportunities'), 'Remaining results must stay reachable');
+  assert(render('/job-seeker-entry').includes('Page not found'), 'Removed seeker entry route is still available');
+  for (const path of ['/', '/create', '/job-seeker-search', '/assigned-job-seekers', '/help']) {
+    const html = render(path);
+    assert(!html.includes('href="/job-seeker-entry"'), 'Seeker editing link remains: ' + path);
+    assert(!html.includes('workspace-breadcrumb'), 'Breadcrumb remains: ' + path);
+    assert(!html.includes('Open app launcher'), 'Launcher button remains: ' + path);
+  }
+  assert(!render('/').includes('quick-access') && !render('/').includes('welcome-banner'), 'Home decorations remain');
+  const { CurrentOpportunity, OpportunityFields } = await server.ssrLoadModule('/src/components/ReviewOpportunity.jsx');
+  const job = { company_name: 'Example Co', company_street: '1 Main St', company_city: 'Orlando', company_state: 'FL', company_zip: '32801', available_jobs: 'Retail, Driver; Cook', notes: 'Follow up' };
+  const summary = renderToString(React.createElement(CurrentOpportunity, { job }));
+  assert(summary.includes('Retail</li>') && summary.includes('Driver</li>') && summary.includes('Cook</li>'), 'Positions are not delimited');
+  const phoneJob = { ...job, contact_phone: '(407) 555-1234' };
+  const phoneLink = renderToString(React.createElement(CurrentOpportunity, { job: phoneJob }));
+  assert(phoneLink.includes('href="tel:4075551234"'), 'Assistant-off Call must use a telephone link');
+  const assistantCall = renderToString(React.createElement(CurrentOpportunity, { job: phoneJob, voiceActive: true }));
+  assert(!assistantCall.includes('href="tel:') && assistantCall.includes('>Call</button>'), 'Assistant-on Call must use the configured handler');
+  const fields = renderToString(React.createElement(OpportunityFields, { job }));
+  assert(fields.includes('name="full_address"') && fields.includes('1 Main St, Orlando, FL 32801'), 'Full address field is missing');
+  assert(!fields.includes('name="company_street"') && !fields.includes('Add/Edit Jobs') && summary.includes('Add/Edit Jobs') && summary.includes('Voice Assistant'), 'Review fields or placeholder changed');
   const entry = render('/job-entry');
   assert(entry.includes('value="WA"') && entry.includes('value="DC"'), 'State choices are incomplete');
   assert(entry.includes('for="manual-jobs"'), 'Manual job types have no accessible label');
@@ -68,5 +87,5 @@ try {
   assert(!render('/job-entry').includes('Job opportunity'), 'Malformed user state bypassed access guard');
   values.clear();
   assert(!render('/search').includes('href="/job-seeker-search"'), 'Signed-out search leaked private navigation');
-  console.log('PASS: 11 private routes blocked signed out and rendered signed in; 6 public pages rendered; malformed state and public search verified. No API calls.');
+  console.log('PASS: 10 private routes blocked signed out and rendered signed in; 6 public pages rendered; malformed state and public search verified. No API calls.');
 } finally { await server.close(); }

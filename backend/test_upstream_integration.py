@@ -18,14 +18,6 @@ class UpstreamIntegrationTests(unittest.TestCase):
                 self.gc.open_by_key.assert_called_once_with(backend.SPREADSHEET_ID_PHONE_VERIFICATION)
                 self.assertNotIn('phone_verification_records', backend._cache)
 
-    def test_edit_sharepoint_seeker_uses_current_headers_and_sheet(self):
-        self.sheet.get_row.return_value = ['Full Name', 'Street Address', 'ZipCode', 'Desired Job Types', 'Comments']
-        response = self.client.post('/api/update-seeker', json={'row_index': 3, 'name': 'Person', 'street': 'Main St', 'zipcode': '32801', 'desired_job_types': ['Retail'], 'general_notes': 'Follow up'})
-        self.assertEqual(response.status_code, 200)
-        self.gc.open_by_key.assert_called_once_with(backend.SPREADSHEET_ID_JOBSEEKERS_CSV_EXPORT)
-        for column, value in enumerate(['Person', 'Main St', '32801', 'Retail', 'Follow up'], 1):
-            self.sheet.update_value.assert_any_call((3, column), value)
-
     def test_map_export_only_includes_recent_hiring_jobs(self):
         today = backend.datetime.datetime.now().strftime('%Y-%m-%d')
         self.sheet.get_all_values.return_value = [
@@ -56,14 +48,11 @@ class UpstreamIntegrationTests(unittest.TestCase):
         self.patcher.start()
         self.addCleanup(self.patcher.stop)
 
-    def test_seeker_creation_and_editing_remain_available(self):
-        response = self.client.post('/api/submit-seeker', json={'name': 'Test Person', 'desired_job_types': ['Retail']})
-        self.assertEqual(response.status_code, 200)
-        self.sheet.append_table.assert_called_once()
-        response = self.client.post('/api/update-seeker', json={'row_index': 4, 'phone': '5551234567', 'desired_job_types': ['Retail', 'Driver']})
-        self.assertEqual(response.status_code, 200)
-        self.sheet.update_value.assert_any_call((4, 2), '5551234567')
-        self.sheet.update_value.assert_any_call((4, 3), 'Retail, Driver')
+    def test_seeker_writes_are_removed(self):
+        for endpoint in ['/api/submit-seeker', '/api/update-seeker']:
+            self.assertNotIn(endpoint, {rule.rule for rule in backend.app.url_map.iter_rules()})
+            self.assertIn(self.client.post(endpoint, json={'row_index': 4, 'name': 'Person'}).status_code, [404, 405])
+        self.gc.open_by_key.assert_not_called()
 
     def test_new_job_starts_at_column_a(self):
         response = self.client.post('/api/submit-job', json={'company_name': 'Test Co'})

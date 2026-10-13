@@ -1,8 +1,10 @@
+import { cancelSpeech } from '../speechCancellation';
+import ReviewVoiceModal from '../components/ReviewVoiceModal';
 import useUnsavedChanges from '../components/useUnsavedChanges';
-import StateOptions from '../components/StateOptions';
+import { CurrentOpportunity, OpportunityFields } from '../components/ReviewOpportunity';
+import { addressFields } from '../reviewAddress';
 import { remainingReviewJobs } from '../hotJobReview';
 import JobTypePicker from '../components/JobTypePicker';
-import EntryJobTypes from '../components/EntryJobTypes';
 import { Phone, Clock3, ClipboardCheck, Search, ArrowRight, Trash2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
@@ -24,13 +26,32 @@ const JOB_OPTIONS = [
 ];
 
 function HotJobsReview({ user }) {
-  const { formProps, markSaved, confirmDiscard } = useUnsavedChanges();
+  const { formProps, markSaved, markDirty, setDirty, isDirty, confirmDiscard } = useUnsavedChanges();
   const [jobs, setJobs] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const mutationRef = useRef(false);
+  const originalJobs = useRef([]);
+  const stagedJobs = useRef(null);
+  const editorDirty = useRef(false);
+  const [editingJobs, setEditingJobs] = useState(false);
+  const [, setPositionsVersion] = useState(0);
+  const refreshDirty = () => {
+    const form = formRef.current;
+    const fieldsChanged = form && [...form.elements].some(field => field.name && 'defaultValue' in field && field.value !== field.defaultValue);
+    const job = jobsRef.current[currentIndexRef.current];
+    const original = originalJobs.current.find(item => item.row_index === job?.row_index && item.source === job?.source);
+    const recordChanged = original && JSON.stringify(job) !== JSON.stringify(original);
+    setDirty(!!fieldsChanged || !!recordChanged || editorDirty.current || (stagedJobs.current !== null && stagedJobs.current !== (job?.available_jobs || '')));
+  };
+  const clearDraft = () => {
+    const original = originalJobs.current[currentIndexRef.current];
+    if (original) { const restored = [...jobsRef.current]; restored[currentIndexRef.current] = { ...original }; jobsRef.current = restored; setJobs(restored); }
+    stagedJobs.current = null; editorDirty.current = false; setEditingJobs(false); markSaved();
+    setUpdateKey(previous => previous + 1);
+  };
   const [message, setMessage] = useState('');
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
@@ -40,7 +61,11 @@ function HotJobsReview({ user }) {
   const [selectedJobTypes, setSelectedJobTypes] = useState([]);
   const [companySearchQuery, setCompanySearchQuery] = useState('');
   const [reviewTitle, setReviewTitle] = useState('Hot Jobs Review');
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const [showSeekersModal, setShowSeekersModal] = useState(false);
+
+  const [skipVoiceIntro, setSkipVoiceIntro] = useState(() => localStorage.getItem('goodjobnet_skip_voice_intro') === 'true');
+  useEffect(() => { localStorage.setItem('goodjobnet_skip_voice_intro', String(skipVoiceIntro)); }, [skipVoiceIntro]);
 
   const [callMethod, setCallMethod] = useState(() => {
     return localStorage.getItem('goodjobnet_call_method') || 'google-voice';
@@ -168,9 +193,16 @@ function HotJobsReview({ user }) {
     }
   };
 
+  const cancelAssistantSpeech = () => cancelSpeech(window.speechSynthesis, activeUtteranceRef, isSpeakingTTSRef);
+
+  useEffect(() => () => {
+    voiceActiveRef.current = false;
+    cancelSpeech(window.speechSynthesis, activeUtteranceRef, isSpeakingTTSRef);
+  }, []);
+
   // Text-To-Speech (TTS) voice synthesis with Speech Recognition coordination
   const speak = (text, onEndCallback = null, rate = 0.95) => {
-    if ('speechSynthesis' in window) {
+    if (voiceActiveRef.current && 'speechSynthesis' in window) {
       console.log(`[Voice Assistant] TTS Speaking: "${text}"`);
 
       // 1. Abort current speech recognition immediately if active
@@ -182,19 +214,19 @@ function HotJobsReview({ user }) {
         }
       }
 
+      cancelAssistantSpeech();
+
       // 2. Set speaking state
       isSpeakingTTSRef.current = true;
       setSpeechStatus('System speaking...');
 
-      // Cancel any ongoing synthesis
-      window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = rate; // use custom rate if provided
       activeUtteranceRef.current = utterance;
 
       const handleSpeechEnd = () => {
-        if (activeUtteranceRef.current === utterance) {
+        if (voiceActiveRef.current && activeUtteranceRef.current === utterance) {
           console.log("[Voice Assistant] TTS Speaking finished.");
           isSpeakingTTSRef.current = false;
           activeUtteranceRef.current = null;
@@ -209,7 +241,10 @@ function HotJobsReview({ user }) {
       utterance.onend = handleSpeechEnd;
       utterance.onerror = (event) => {
         console.warn("[Voice Assistant] TTS speaking error or cancelled:", event);
-        handleSpeechEnd();
+        if (activeUtteranceRef.current !== utterance) return;
+        activeUtteranceRef.current = null;
+        isSpeakingTTSRef.current = false;
+        if (voiceActiveRef.current) setSpeechTrigger(prev => prev + 1);
       };
 
       window.speechSynthesis.speak(utterance);
@@ -226,6 +261,30 @@ function HotJobsReview({ user }) {
     const ageText = job.age_days === 9999 ? '. Never verified' : `. Age: ${job.age_days} days`;
     const text = `Company: ${job.company_name || 'unknown'}. Company Type: ${companyType}. Currently Hiring: ${currentlyHiring}. Available Jobs: ${available}. Contact Phone: ${contactPhoneFormatted}${notesText}${ageText}.`;
     speak(text);
+  };
+
+  const dialCompany = async (phone, method) => {
+    if (isCallActive) return;
+    pendingCallPhoneRef.current = null;
+    setPendingCallPhone(null);
+    handlePauseVoiceSilently();
+    setIsCallActive(true);
+    setMessage('');
+    try {
+      const response = await fetch('http://127.0.0.1:5001/api/dial', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, method })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Could not initiate the call.');
+      setIsHookActive(!!result.hook_active);
+    } catch (error) {
+      setMessage(error.message === 'Failed to fetch' ? 'Start the local calling helper to use Google Voice.' : error.message);
+      setSuccess(false);
+      setIsCallActive(false);
+      setIsHookActive(false);
+    }
   };
 
   // Telephone call handler
@@ -403,6 +462,7 @@ function HotJobsReview({ user }) {
       available_jobs: available_jobs_str
     };
     setJobs(updatedJobs);
+    markDirty();
     setUpdateKey(prev => prev + 1);
 
     playChirp('success');
@@ -468,6 +528,7 @@ function HotJobsReview({ user }) {
       company_type: finalType
     };
     setJobs(updatedJobs);
+    markDirty();
     setUpdateKey(prev => prev + 1);
     playChirp('success');
     speak(`Updated company type to: ${finalType}. You can say "save" to submit, or "update company type" to try again.`);
@@ -481,6 +542,7 @@ function HotJobsReview({ user }) {
       notes: transcript
     };
     setJobs(updatedJobs);
+    markDirty();
     setUpdateKey(prev => prev + 1);
     playChirp('success');
     speak(`Updated additional notes to: ${transcript}. You can say "save" to submit, or "update notes" to try again.`);
@@ -518,6 +580,7 @@ function HotJobsReview({ user }) {
       currently_hiring: status
     };
     setJobs(updatedJobs);
+    markDirty();
     setUpdateKey(prev => prev + 1);
     playChirp('success');
     speak(`Updated currently hiring status to: ${status}. You can say "save" to submit, or "update currently hiring status" to try again.`);
@@ -544,6 +607,7 @@ function HotJobsReview({ user }) {
         if (data.success) {
           const jobsList = [...(data.jobs || [])];
           if (category === 'unverified_no_career') jobsList.sort((a, b) => (parseFloat(b.seekers_looking) || 0) - (parseFloat(a.seekers_looking) || 0));
+          originalJobs.current = jobsList.map(job => ({ ...job }));
           setJobs(jobsList);
           const selectedIndex = jobsList.findIndex(job => job.row_index === location.state?.editJob?.row_index);
           if (selectedIndex >= 0) setCurrentIndex(selectedIndex);
@@ -561,7 +625,8 @@ function HotJobsReview({ user }) {
   const currentJob = jobs[currentIndex];
 
   const handleNext = () => {
-    if (!confirmDiscard()) return;
+    if (mutationRef.current || !confirmDiscard()) return;
+    clearDraft();
     setShowSeekersModal(false);
     if (currentIndexRef.current < jobsRef.current.length - 1) {
       const nextIdx = currentIndexRef.current + 1;
@@ -583,7 +648,8 @@ function HotJobsReview({ user }) {
   };
 
   const handlePrev = () => {
-    if (!confirmDiscard()) return;
+    if (mutationRef.current || !confirmDiscard()) return;
+    clearDraft();
     setShowSeekersModal(false);
     if (currentIndexRef.current > 0) {
       const prevIdx = currentIndexRef.current - 1;
@@ -605,7 +671,8 @@ function HotJobsReview({ user }) {
   };
 
   const handleGoBack = () => {
-    if (!confirmDiscard()) return;
+    if (mutationRef.current || !confirmDiscard()) return;
+    clearDraft();
     setShowSeekersModal(false);
     setCategorySelected(false);
     setJobs([]);
@@ -613,7 +680,7 @@ function HotJobsReview({ user }) {
     setMessage('');
     setSuccess(false);
     // Stop voice and synthesis when exiting reviews
-    if (voiceActive) {
+    if (voiceActiveRef.current) {
       setVoiceActive(false);
       voiceActiveRef.current = false;
       setIsListeningForJobs(false);
@@ -629,17 +696,9 @@ function HotJobsReview({ user }) {
         } catch (e) { }
       }
     }
-    window.speechSynthesis.cancel();
+    cancelAssistantSpeech();
     if (location.state?.returnTo) {
       navigate(location.state.returnTo);
-    } else if (location.state?.fromEntry) {
-      navigate('/job-seeker-entry', {
-        state: {
-          seeker: location.state.seeker,
-          fromAssigned: location.state.fromAssigned,
-          fromSearch: location.state.fromSearch
-        }
-      });
     } else {
       navigate('/hot-jobs-review', { replace: true });
     }
@@ -1151,12 +1210,12 @@ function HotJobsReview({ user }) {
 
   const toggleVoiceActive = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
+    if (!voiceActiveRef.current && !SpeechRecognition) {
       alert("Speech Recognition API is not supported in this browser. Please use Google Chrome or Microsoft Edge.");
       return;
     }
 
-    if (voiceActive) {
+    if (voiceActiveRef.current) {
       setVoiceActive(false);
       voiceActiveRef.current = false;
       setIsVoicePaused(false);
@@ -1175,7 +1234,7 @@ function HotJobsReview({ user }) {
           recognitionRef.current.stop();
         } catch (e) { }
       }
-      window.speechSynthesis.cancel();
+      cancelAssistantSpeech();
       playChirp('error');
       setSpeechStatus('Voice Controls Offline');
     } else {
@@ -1187,7 +1246,7 @@ function HotJobsReview({ user }) {
       isListeningForHiringRef.current = false;
       playChirp('success');
       setSpeechStatus('Initializing...');
-      speak("Voice assistant activated. You can navigate, edit job types, or call the company using voice commands.", () => {
+      speak(skipVoiceIntro ? "Voice assistant activated." : "Voice assistant activated. You can navigate, edit job types, or call the company using voice commands.", () => {
         if (jobsRef.current.length > 0) {
           speakJobDetails(jobsRef.current[currentIndexRef.current]);
         }
@@ -1220,31 +1279,7 @@ function HotJobsReview({ user }) {
           speak("Dialing now.");
           handlePauseVoiceSilently();
 
-          setIsCallActive(true);
-          fetch('http://127.0.0.1:5001/api/dial', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: phoneToDial, method: callMethod })
-          })
-            .then(res => res.json())
-            .then(data => {
-              if (data.success) {
-                setIsHookActive(!!data.hook_active);
-              } else {
-                console.error("Dial error:", data.error);
-                speak("Failed to initiate call on the device.");
-                setIsCallActive(false);
-                setIsHookActive(false);
-              }
-            })
-            .catch(err => {
-              console.error("Dial fetch error from local helper:", err);
-              speak("Local helper script is not running. Please start local helper dot p y on your computer.");
-              setMessage("Local helper script is not running on port 5001! Please start local_helper.py.");
-              setSuccess(false);
-              setIsCallActive(false);
-              setIsHookActive(false);
-            });
+          dialCompany(phoneToDial, callMethod);
         } else {
           e.preventDefault();
           pendingCallPhoneRef.current = null; // Clear ref synchronously to prevent double keypresses
@@ -1284,11 +1319,11 @@ function HotJobsReview({ user }) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [voiceActive, callMethod, pendingCallPhone, isCallActive]);
+  }, [voiceActive, callMethod, pendingCallPhone, isCallActive, skipVoiceIntro]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (mutationRef.current) return;
+    if (mutationRef.current || !isDirty || editingJobs) return;
     mutationRef.current = true;
     setSaving(true);
     setMessage('');
@@ -1308,17 +1343,19 @@ function HotJobsReview({ user }) {
       data.career_website = careerWebsite;
     }
 
-    const selectedJobs = formData.getAll('available_jobs_select');
-    const manualJobs = data.available_jobs_manual;
-
-    let allJobs = [...selectedJobs];
-    if (manualJobs && manualJobs.trim() !== '') {
-      allJobs.push(manualJobs.trim());
+    try {
+      Object.assign(data, addressFields(data.full_address || '', currentJob));
+      delete data.full_address;
+    } catch (error) {
+      setMessage(error.message);
+      setSuccess(false);
+      mutationRef.current = false;
+      setSaving(false);
+      return;
     }
-    data.available_jobs = allJobs.join(', ');
-
-    delete data.available_jobs_select;
-    delete data.available_jobs_manual;
+    // Persist the locally saved list only with the entry update.
+    data.available_jobs = stagedJobs.current ?? currentJob.available_jobs ?? '';
+    data.currently_hiring = /^(true|yes|1|y)$/i.test(String(currentJob.currently_hiring)) ? 'Yes' : 'No';
 
     if (user && user.name) {
       data.submitter_name = user.name;
@@ -1345,12 +1382,16 @@ function HotJobsReview({ user }) {
           age_days: 0, 
           date_last_verified: todayStr 
         };
+        originalJobs.current = updatedJobs.map(job => ({ ...job }));
+        stagedJobs.current = null;
+        editorDirty.current = false;
         setJobs(updatedJobs);
+        setUpdateKey(previous => previous + 1);
 
         if (voiceActiveRef.current) {
           speak('Job successfully updated! Moving to next job.');
           setTimeout(() => {
-            handleNext();
+            if (voiceActiveRef.current) handleNext();
           }, 1500);
         } else {
           setMessage('Job successfully updated!');
@@ -1407,6 +1448,11 @@ function HotJobsReview({ user }) {
 
         const updatedJobs = remainingReviewJobs(jobsRef.current, job.row_index);
         jobsRef.current = updatedJobs;
+        originalJobs.current = updatedJobs.map(job => ({ ...job }));
+        stagedJobs.current = null;
+        editorDirty.current = false;
+        setEditingJobs(false);
+        markSaved();
         // The next spreadsheet row can inherit the deleted row number. Remount its inputs.
         setUpdateKey(previous => previous + 1);
         if (updatedJobs.length === 0) {
@@ -1473,8 +1519,8 @@ function HotJobsReview({ user }) {
   }
 
   return (
-    <div className="app-container fade-in review-workspace">
-      <div className="glass-panel main-form streamlined-entry">
+    <div className="workspace-page review-workspace">
+      <div className="review-body">
         <header className="review-heading">
           <div>
             <h1>{reviewTitle}</h1>
@@ -1541,232 +1587,23 @@ function HotJobsReview({ user }) {
           </div>
         </header>
 
-        {/* VOICE ASSISTANT CONTROL HUD PANEL */}
-        <details className="review-voice-tools" open={voiceActive || undefined}><summary>Voice assistant & call settings</summary><div className="voice-assistant-panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className={`btn ${(voiceActive && !isVoicePaused) ? 'mic-pulsing' : 'secondary-btn'}`}
-                onClick={toggleVoiceActive}
-                style={{ width: 'auto', padding: '0.6rem 1.2rem', gap: '0.5rem', display: 'inline-flex', alignItems: 'center' }}
-                title="Press 'V' to toggle voice control"
-              >
-                <FaMicrophone />
-                {voiceActive ? (isVoicePaused ? 'Voice Assistant PAUSED' : 'Voice Assistant ON') : 'Turn On Voice Assistant'}
-              </button>
-
-              <div className="call-mode-control">
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-light)', fontWeight: '500' }}>Call Mode:</span>
-                <select
-                  value={callMethod}
-                  onChange={e => setCallMethod(e.target.value)}
-                  style={{ background: 'var(--surface)', color: 'var(--text-dark)', border: '1px solid #ced4da', padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.85rem', cursor: 'pointer', outline: 'none' }}
-                >
-                  <option value="google-voice">Google Voice (Automated)</option>
-                  <option value="phone-link">Phone Link (Automated)</option>
-                  <option value="speak-only">Read Phone Only</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="voice-status">
-              <span
-                className={`status-dot ${voiceActive && !speechStatus.includes('Error') && !speechStatus.includes('Denied') && !speechStatus.includes('Offline') ? 'active' : ''}`}
-                style={{
-                  background: (voiceActive && !speechStatus.includes('Error') && !speechStatus.includes('Denied') && !speechStatus.includes('Offline'))
-                    ? (speechStatus === 'System speaking...' ? '#f1c40f' : 'var(--success)')
-                    : (speechStatus.includes('Error') || speechStatus.includes('Denied')) ? 'var(--error)' : '#bdc3c7'
-                }}
-              ></span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flex: 1 }}>
-                <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>
-                  {speechStatus}
-                </span>
-                {voiceActive && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-light)', minWidth: '55px' }}>Mic Level:</span>
-                    <div style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(0,0,0,0.15)', height: '8px', borderRadius: '4px', flex: 1, overflow: 'hidden' }}>
-                      <div
-                        style={{
-                          background: micVolume > 60 ? 'var(--error)' : micVolume > 15 ? 'var(--success)' : 'rgba(0,0,0,0.15)',
-                          height: '100%',
-                          width: `${micVolume}%`,
-                          transition: 'width 0.08s ease'
-                        }}
-                      />
-                    </div>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-light)', minWidth: '25px', textAlign: 'right' }}>{micVolume}%</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {voiceActive && (
-            <div style={{ borderTop: '1px solid rgba(0,0,0,0.1)', paddingTop: '0.8rem', fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <span style={{ color: 'var(--text-light)', fontWeight: 'bold' }}>Last heard:</span>
-                  <span style={{ fontStyle: 'italic', color: 'var(--primary-color)' }}>"{lastHeard || 'Speak a command...'}"</span>
-                </div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-light)', fontStyle: 'italic' }}>
-                  *Microphone test: Mic Level moves when you make sound.
-                </span>
-              </div>
-
-              <div style={{ color: 'var(--text-light)', fontSize: '0.8rem', display: 'flex', flexWrap: 'wrap', gap: '0.8rem' }}>
-                <span><strong>Commands:</strong></span>
-                <span>• "Next job"</span>
-                <span>• "Previous job"</span>
-                <span>• "Read details"</span>
-                <span>• "Update company type"</span>
-                <span>• "Update job types"</span>
-                <span>• "Update currently hiring status"</span>
-                <span>• "Update notes"</span>
-                <span>• "Call company"</span>
-                <span>• "Pause"</span>
-                <span>• "Resume"</span>
-                <span>• "Save"</span>
-                <span>• "Delete job"</span>
-                <span>• "Help"</span>
-              </div>
-
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-light)', background: 'rgba(241, 196, 15, 0.1)', borderLeft: '3px solid #f1c40f', padding: '0.4rem 0.8rem', borderRadius: '4px', marginTop: '0.4rem' }}>
-                <strong>Troubleshooting:</strong> If <em>Mic Level</em> stays at 0%, click the lock/settings icon next to the URL in the address bar. Ensure "Microphone" is set to "Allow". If it is allowed, check Chrome Settings &gt; Privacy and security &gt; Site settings &gt; Microphone to verify the correct physical device is selected as your default.
-              </div>
-
-            </div>
-          )}
-        </div>
-
-        </details>
-        <section className="review-contact-strip"><div><p className="eyebrow">CURRENT OPPORTUNITY</p><h2>{currentJob.company_name}</h2><p>{[currentJob.company_street, currentJob.company_city, currentJob.company_state, currentJob.company_zip].filter(Boolean).join(', ')}</p></div><div>{currentJob.contact_name && <span>{currentJob.contact_name}</span>}{currentJob.contact_phone && <button type="button" className="solid-button" onClick={handleCallCompany}><Phone size={16} />Call company</button>}</div></section>
-        <div className="review-pagination">
-          <button type="button" className="btn secondary-btn" onClick={handlePrev} disabled={currentIndex === 0} style={{ width: 'auto' }}>
+        {showVoiceSettings && <ReviewVoiceModal onClose={() => setShowVoiceSettings(false)} voiceActive={voiceActive} isVoicePaused={isVoicePaused} onToggle={toggleVoiceActive} callMethod={callMethod} onCallMethodChange={setCallMethod} speechStatus={speechStatus} micVolume={micVolume} lastHeard={lastHeard} skipVoiceIntro={skipVoiceIntro} onSkipVoiceIntroChange={setSkipVoiceIntro} />}
+        <div className="review-split">
+          <CurrentOpportunity key={`summary-${currentJob.source}-${currentJob.row_index}-${updateKey}`} job={{ ...currentJob, available_jobs: stagedJobs.current ?? currentJob.available_jobs }} busy={saving || deleting} onJobsSave={value => { stagedJobs.current = value; setPositionsVersion(previous => previous + 1); }} onEditChange={(changed, editing) => { editorDirty.current = changed; setEditingJobs(editing); refreshDirty(); }} voiceActive={voiceActive} onCall={handleCallCompany} onVoiceSettings={() => setShowVoiceSettings(true)}>
+            <div className="review-current-footer">
+              <button type="button" className="btn secondary-btn" onClick={handleGoBack} disabled={saving || deleting}>Cancel</button>
+            <div className="review-pagination">
+          <button type="button" className="btn secondary-btn" onClick={handlePrev} disabled={currentIndex === 0 || saving || deleting} style={{ width: 'auto' }}>
             &larr; Previous Job
           </button>
-          <button type="button" className="btn secondary-btn" onClick={handleNext} disabled={currentIndex === jobs.length - 1} style={{ width: 'auto' }}>
+          <button type="button" className="btn secondary-btn" onClick={handleNext} disabled={currentIndex === jobs.length - 1 || saving || deleting} style={{ width: 'auto' }}>
             Next Job &rarr;
           </button>
         </div>
-
-        <form {...formProps} ref={formRef} onSubmit={handleSubmit} key={`${currentJob.row_index}-${updateKey}`}>
-          {(() => {
-            const existingJobs = (currentJob.available_jobs || '').split(',').map(s => s.trim()).filter(Boolean);
-            const matchedJobs = existingJobs.filter(j => JOB_OPTIONS.includes(j));
-            const unmatchedJobs = existingJobs.filter(j => !JOB_OPTIONS.includes(j));
-
-            return (<>
-              <fieldset className="entry-section"><legend>Company & location</legend><div className="form-grid">
-                <div className="input-group">
-                  <label htmlFor="review-company_name">Company Name <span className="required">*</span></label>
-                  <input id="review-company_name" type="text" name="company_name" defaultValue={currentJob.company_name} required />
-                </div>
-
-                <div className="input-group">
-                  <label htmlFor="hotjobsreview-company_type">Company Type</label>
-                  <input id="hotjobsreview-company_type" type="text" name="company_type" defaultValue={currentJob.company_type || ''} list="company-types" placeholder="Enter or select type..." />
-                  <datalist id="company-types">
-                    <option value="Call Center" />
-                    <option value="Construction" />
-                    <option value="Driving" />
-                    <option value="Education" />
-                    <option value="Fast Food" />
-                    <option value="Government related" />
-                    <option value="Healthcare" />
-                    <option value="Hospitality" />
-                    <option value="Janitorial" />
-                    <option value="Non-Profit" />
-                    <option value="Restaurant" />
-                    <option value="Retail" />
-                    <option value="Services" />
-                    <option value="Technology" />
-                    <option value="Theme Park" />
-                    <option value="Vocation careers (HVAC, plumbing, electrical, etc)" />
-                  </datalist>
-                </div>
-
-                <div className="input-group full-width">
-                  <label htmlFor="hotjobsreview-company_street">Company Street Address</label>
-                  <input id="hotjobsreview-company_street" type="text" name="company_street" defaultValue={currentJob.company_street} />
-                </div>
-
-                <div className="input-group">
-                  <label htmlFor="hotjobsreview-company_city">City</label>
-                  <input id="hotjobsreview-company_city" type="text" name="company_city" defaultValue={currentJob.company_city} />
-                </div>
-
-                <div className="input-group">
-                  <label htmlFor="hotjobsreview-company_state">Company State</label>
-                  <select id="hotjobsreview-company_state" name="company_state" defaultValue={currentJob.company_state || 'FL'}><StateOptions /></select>
-                </div>
-
-                <div className="input-group">
-                  <label htmlFor="hotjobsreview-company_zip">Company Zipcode</label>
-                  <input id="hotjobsreview-company_zip" type="text" name="company_zip" inputMode="numeric" pattern="[0-9]{5}(-[0-9]{4})?" title="Enter a five-digit ZIP code or ZIP+4." defaultValue={currentJob.company_zip} />
-                </div>
-
-              </div></fieldset><fieldset className="entry-section"><legend>Hiring contact</legend><div className="form-grid">
-                <div className="input-group full-width">
-                  <label htmlFor="review-career_website">Career Website URL</label>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input id="review-career_website" type="text" name="career_website" defaultValue={currentJob.career_website} style={{ flex: 1 }} />
-                    {currentJob.career_website && (
-                      <a href={currentJob.career_website.startsWith('http') ? currentJob.career_website : `https://${currentJob.career_website}`} target="_blank" rel="noopener noreferrer" className="btn secondary-btn" style={{ width: 'auto', padding: '0.8rem 1rem' }}>
-                        Open Link
-                      </a>
-                    )}
-                  </div>
-                </div>
-
-                <div className="input-group">
-                  <label htmlFor="review-contact_name">Hiring Contact Name</label>
-                  <input id="review-contact_name" type="text" name="contact_name" defaultValue={currentJob.contact_name} />
-                </div>
-
-                <div className="input-group">
-                  <label htmlFor="hotjobsreview-contact_phone">Hiring Contact Phone</label>
-                  <input id="hotjobsreview-contact_phone" type="tel" name="contact_phone" defaultValue={currentJob.contact_phone} />
-                </div>
-
-                <div className="input-group">
-                  <label htmlFor="hotjobsreview-contact_email">Hiring Contact Email</label>
-                  <input id="hotjobsreview-contact_email" type="email" name="contact_email" defaultValue={currentJob.contact_email} />
-                </div>
-
-              </div></fieldset><fieldset className="entry-section"><legend>Opportunities & notes</legend><div className="form-grid">
-                <div className="input-group">
-                  <label htmlFor="hotjobsreview-currently_hiring">Currently Hiring</label>
-                  <select id="hotjobsreview-currently_hiring"
-                    name="currently_hiring"
-                    defaultValue={
-                      (currentJob.currently_hiring === 'TRUE' ||
-                        currentJob.currently_hiring === 'Yes' ||
-                        currentJob.currently_hiring === true ||
-                        String(currentJob.currently_hiring).toUpperCase() === 'TRUE')
-                        ? 'Yes'
-                        : 'No'
-                    }
-                  >
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
-                  </select>
-                </div>
-
-                <div className="input-group full-width">
-                  <EntryJobTypes name="available_jobs_select" initial={matchedJobs} label="Available job types" />
-                  <label htmlFor="manual-jobs" style={{ display: 'block', marginTop: '1rem' }}>Other available jobs</label><input id="manual-jobs" type="text" name="available_jobs_manual" defaultValue={unmatchedJobs.join(', ')} placeholder="Other available jobs (comma separated)" style={{ marginTop: '0.5rem' }} />
-                </div>
-
-                <div className="input-group full-width">
-                  <label htmlFor="hotjobsreview-notes">Additional Notes</label>
-                  <textarea id="hotjobsreview-notes" name="notes" rows="2" defaultValue={currentJob.notes}></textarea>
-                </div>
-              </div></fieldset>
-</>            );
-          })()}
-
+            </div>
+          </CurrentOpportunity>
+          <form className="review-details" aria-labelledby="opportunity-details-title" {...formProps} onChangeCapture={refreshDirty} ref={formRef} onSubmit={handleSubmit} key={`details-${currentJob.source}-${currentJob.row_index}-${updateKey}`}>
+            <OpportunityFields job={currentJob} />
           {message && (
             <div role={success ? "status" : "alert"} style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: success ? 'var(--success)' : 'var(--error)' }}>
               {message}
@@ -1774,15 +1611,15 @@ function HotJobsReview({ user }) {
           )}
 
           <div className="actions mt-2 mb-1" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-            <button type="button" className="btn secondary-btn" onClick={handleGoBack} disabled={saving || deleting}>Cancel</button>
-            <button type="submit" className="btn primary-btn" disabled={saving || deleting}>
-              {saving ? 'Updating...' : 'Update Job'}
-            </button>
             <button type="button" className="subtle-button review-delete" onClick={handleDeleteJob} disabled={saving || deleting}>
               <Trash2 size={16} />{deleting ? 'Deleting...' : 'Delete job'}
             </button>
+            <button type="submit" className="btn primary-btn" disabled={!isDirty || editingJobs || saving || deleting}>
+              {saving ? 'Updating...' : 'Update Job'}
+            </button>
           </div>
-        </form>
+          </form>
+        </div>
       </div>
 
       {/* MODAL FOR MATCHING ASSIGNED SEEKERS */}

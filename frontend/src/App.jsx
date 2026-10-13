@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import Login from './pages/Login';
 import JobEntry from './pages/JobEntry';
-import JobSeekerEntry from './pages/JobSeekerEntry';
 import HotJobSearch from './pages/HotJobSearch';
 import JobSeekerSearch from './pages/JobSeekerSearch';
 import InformationAndHelp from './pages/InformationAndHelp';
@@ -58,7 +57,6 @@ export default function App() {
         <Route path="/employment-dashboard" element={<Home user={user} />} />
         <Route path="/create" element={<CreatePage />} />
         <Route path="/job-entry" element={<JobEntry user={user} />} />
-        <Route path="/job-seeker-entry" element={<JobSeekerEntry user={user} />} />
         <Route path="/hot-jobs-review" element={<HotJobsReview user={user} />} />
         <Route path="/hot-jobs-5review" element={<HotJobsReview user={user} />} />
         <Route path="/hot-jobs-46review" element={<HotJobsReview user={user} />} />

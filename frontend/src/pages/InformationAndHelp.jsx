@@ -25,7 +25,7 @@ function InformationAndHelp() {
   return (
     <div className="help-container fade-in workspace-page">
       <div className="help-card">
-        <p><Link to="/job-seeker-entry">Add a job seeker</Link> or open a person from search to edit their profile. <Link to="/map">Explore the job map</Link>.</p>
+        <p><Link to="/map">Explore the job map</Link> or search job seekers to view their profiles.</p>
         <header style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
           <div style={{
             display: 'inline-flex',

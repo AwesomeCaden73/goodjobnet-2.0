@@ -1,14 +1,16 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Guard common exits without altering the router or the server's save behavior.
 export default function useUnsavedChanges() {
   const dirty = useRef(false);
-  const markDirty = () => { dirty.current = true; };
-  const markSaved = () => { dirty.current = false; };
+  const [isDirty, setIsDirty] = useState(false);
+  const setDirty = value => { dirty.current = value; setIsDirty(value); };
+  const markDirty = () => setDirty(true);
+  const markSaved = () => setDirty(false);
   const confirmDiscard = () => {
     if (!dirty.current) return true;
     if (!window.confirm('Discard your unsaved changes?')) return false;
-    dirty.current = false;
+    markSaved();
     return true;
   };
   useEffect(() => {
@@ -22,7 +24,7 @@ export default function useUnsavedChanges() {
       if (url.origin !== window.location.origin || (url.pathname === window.location.pathname && url.search === window.location.search)) return;
       if (!window.confirm('Discard your unsaved changes?')) {
         event.preventDefault(); event.stopPropagation();
-      } else dirty.current = false;
+      } else markSaved();
     };
     window.addEventListener('beforeunload', unload);
     document.addEventListener('click', leave, true);
@@ -34,5 +36,5 @@ export default function useUnsavedChanges() {
       if (event.target.closest?.('.selected-job-types button, .job-type-footer .text-link')) markDirty();
     },
   };
-  return { formProps, markSaved, confirmDiscard };
+  return { formProps, markSaved, markDirty, setDirty, isDirty, confirmDiscard };
 }

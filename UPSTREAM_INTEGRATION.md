@@ -56,3 +56,21 @@ Seeker creation continues to use the fork's intake sheet. Existing seeker edits
 use the upstream SharePoint-derived roster and its current column names. Fields
 not present in that roster cannot be persisted by the existing header-based editor;
 a later SharePoint import replaces the roster, as designed upstream.
+
+
+## Follow-up interface changes ? October 13, 2026
+
+The user's new direction supersedes the earlier decision to retain seeker writes.
+Removed the seeker entry component, route, create/edit links, and both write API
+endpoints. Search and read-only profiles remain, as do administrative roster imports.
+Removed Home's welcome banner and Quick Access, the global breadcrumb, and the
+header launcher button. Navigation now shows app labels beside icons, including
+Administration for administrators; small screens wrap navigation above the content.
+
+Review uses an open two-column layout with the opportunity summary on the left and
+editable details on the right. Full address is one line, accepting Street, City,
+ST ZIP and retaining the spreadsheet's separate columns. Unchanged partial addresses
+remain valid. Add/Edit Jobs is intentionally a button without an action. Saving
+preserves existing job positions and hiring status; call and voice controls remain.
+On narrow screens the two columns stack. Validation: production build, route checks,
+19 frontend tests, and 16 offline backend tests. No live calls or spreadsheet writes.

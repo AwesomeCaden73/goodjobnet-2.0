@@ -259,10 +259,6 @@ function EmploymentCenterDashboard({ user }) {
             <FaUserTie />
             <h3>Search for nearby job seekers</h3>
           </Link>
-          <Link to="/job-seeker-entry" className="nav-card">
-            <FaUserTie />
-            <h3>Job Seeker Entry</h3>
-          </Link>
         </div>
 
 

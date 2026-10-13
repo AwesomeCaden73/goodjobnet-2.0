@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ArrowUpRight, BriefcaseBusiness, Users, ClipboardCheck, MapPin, Plus, Clock3, LayoutGrid, HeartHandshake } from 'lucide-react';
-import { visibleApps } from '../components/navigation';
+import { ArrowRight, BriefcaseBusiness, Users, ClipboardCheck, MapPin, Clock3, HeartHandshake } from 'lucide-react';
 
 function Breakdown({ title, values = {}, total, color }) {
   const entries = Object.entries(values).sort((a, b) => b[1] - a[1]);
@@ -12,7 +11,6 @@ function Breakdown({ title, values = {}, total, color }) {
 export default function Home({ user }) {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState('All apps');
   useEffect(() => {
     if (!user) return;
     const controller = new AbortController();
@@ -22,14 +20,12 @@ export default function Home({ user }) {
     }).catch(e => { if (e.name !== 'AbortError') setError('Dashboard information could not be loaded. Refresh to try again.'); });
     return () => controller.abort();
   }, [user]);
-  const shortcuts = visibleApps(user).filter(a => a.title !== 'Home' && (filter === 'All apps' || (filter === 'Opportunities' ? ['Jobs', 'Job map', 'Review'].includes(a.title) : ['Job seekers', 'My people', 'Help'].includes(a.title))));
   const metrics = [
     { label: 'Active job opportunities', value: stats?.total_hot_jobs, icon: BriefcaseBusiness, color: 'blue', path: '/hot-job-search', detail: 'Explore the job bank' },
     { label: 'People seeking employment', value: stats?.total_job_seekers, icon: Users, color: 'teal', path: '/job-seeker-search', detail: 'Make a connection' },
     { label: 'Jobs awaiting verification', value: stats?.unverified_jobseekers_count, icon: ClipboardCheck, color: 'purple', path: '/hot-jobs-5review', detail: 'Review opportunities' },
   ];
   return <div className="home-page">
-    <section className="welcome-banner"><div className="home-app-art" aria-hidden="true"><BriefcaseBusiness /><Users /><ClipboardCheck /></div><div className="welcome-copy"><p className="eyebrow">GOOD PEOPLE. NEW POSSIBILITIES.</p><h1>{user ? 'Welcome back, ' + user.name.split(' ')[0] : 'Your next chapter starts here.'}</h1><p>{user ? 'A little connection can make a big difference. Let’s get to work.' : 'Find local opportunities and the support to move forward.'}</p><div className="welcome-actions"><Link className="solid-button" to={user ? '/assigned-job-seekers' : '/hot-job-search'}>{user ? 'Go to my people' : 'Explore jobs'}<ArrowRight size={17} /></Link><Link className="text-link" to={user ? '/create' : '/help'}>{user ? 'Create new' : 'How we can help'}{user ? <Plus size={16} /> : <ArrowRight size={16} />}</Link></div></div><span className="region-label"><MapPin size={14} /> Central Florida</span></section>
     <div className="home-content">
       <div className="section-heading"><h2>{user ? 'Your community at a glance' : 'A good place to start'}</h2><span className="muted">Orlando Employment Center</span></div>
       {error && <p className="inline-error" role="alert">{error}</p>}
@@ -38,7 +34,6 @@ export default function Home({ user }) {
         <Link className="feature-card surface" to="/map"><div className="feature-illustration map-art"><MapPin size={62} strokeWidth={1.1} /><span /><span /></div><div><h3>Discover what’s nearby</h3><p>See employment opportunities across Central Florida.</p><span className="text-link">Explore the map <ArrowRight size={16} /></span></div></Link>
         <Link className="feature-card surface" to="/help"><div className="feature-illustration people-art"><HeartHandshake size={62} strokeWidth={1.1} /><span /><span /></div><div><h3>You don’t have to do it alone</h3><p>Get support with resumes, interviews, and your job search.</p><span className="text-link">Find support <ArrowRight size={16} /></span></div></Link>
       </>}</div>
-      <section className="quick-access"><div className="section-heading"><h2>Quick access</h2><Link className="text-link" to="/apps">View all apps <ArrowRight size={15} /></Link></div><div className="filter-pills" aria-label="Quick access categories">{['All apps', 'Opportunities', 'People & support'].map((label, i) => <button key={label} className={filter === label ? 'selected' : ''} aria-pressed={filter === label} onClick={() => setFilter(label)}>{i === 0 ? <LayoutGrid size={15} /> : i === 1 ? <BriefcaseBusiness size={15} /> : <Users size={15} />}{label}</button>)}</div><div className="quick-list surface">{shortcuts.map(({ title, path, icon: Icon, color, description }) => <Link to={path} key={path} className="quick-row"><span className={'app-icon small ' + color}><Icon size={20} /></span><strong>{title}</strong><span className="quick-description">{description}</span><ArrowUpRight size={17} /></Link>)}</div></section>
       {user && <div className="dashboard-lower"><div className="breakdown-column"><Breakdown title="Hot jobs by industry" values={stats?.job_types} total={stats?.total_hot_jobs} color="#6264c7" /><Breakdown title="Job seekers by desired type" values={stats?.seeker_types} total={stats?.total_job_seekers} color="#168a88" /></div><section className="surface attention-card"><div className="section-heading"><h2><Clock3 size={18} /> Attention needed</h2><span className="status-badge">Review queue</span></div>{[
         ['Unverified jobs with interested seekers', stats?.unverified_jobseekers_count, '/hot-jobs-review?category=jobseekers'],
         ['Unverified over 3 months · phone required', stats?.unverified_no_career_count, '/hot-jobs-review?category=unverified_no_career'],
